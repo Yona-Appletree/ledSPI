@@ -127,11 +127,11 @@ static struct
 
 	pixel_delta_t* frame_dithering_overflow;
 
+	uint8_t has_prev_frame;
+	uint8_t has_current_frame;
 	uint8_t has_next_frame;
 
 	uint32_t frame_size;
-
-	uint64_t frame_count;
 
 	struct timeval previous_frame_tv;
 	struct timeval current_frame_tv;
@@ -152,10 +152,11 @@ static struct
 	.previous_frame_data = (buffer_pixel_t*)NULL,
 	.current_frame_data = (buffer_pixel_t*)NULL,
 	.next_frame_data = (buffer_pixel_t*)NULL,
+	.has_prev_frame = FALSE,
+	.has_current_frame = FALSE,
 	.has_next_frame = FALSE,
 	.frame_dithering_overflow = (pixel_delta_t*)NULL,
 	.frame_size = 0,
-	.frame_count = 0,
 	.mutex = PTHREAD_MUTEX_INITIALIZER,
 	.last_remote_data_tv = {
 		.tv_sec = 0,
@@ -475,7 +476,6 @@ void ensure_frame_data() {
 		g_frame_data.current_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
 		g_frame_data.next_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
 		g_frame_data.frame_dithering_overflow = malloc(led_count * sizeof(pixel_delta_t));
-		g_frame_data.frame_count = 0;
 		g_frame_data.has_next_frame = FALSE;
 		printf("frame_size1=%u\n", g_frame_data.frame_size);
 
@@ -498,19 +498,21 @@ void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_rem
 	// Prevent buffer overruns
 	data_size = min(data_size, g_frame_data.frame_size * 3);
 
+	// Copy in new data
 	memcpy(g_frame_data.next_frame_data, frame_data, data_size);
+
+	// Zero out any pixels not set by the new frame
 	memset((uint8_t*)g_frame_data.next_frame_data + data_size, 0, (g_frame_data.frame_size*3 - data_size));
 
 	// Update the timestamp & count
 	gettimeofday(&g_frame_data.next_frame_tv, NULL);
-	g_frame_data.frame_count ++;
 
 	// Update remote data timestamp if applicable
 	if (is_remote) {
 		gettimeofday(&g_frame_data.last_remote_data_tv, NULL);
 	}
 
-	g_frame_data.has_next_frame = (g_frame_data.frame_count > 2);
+	g_frame_data.has_next_frame = TRUE;
 
 	pthread_mutex_unlock(&g_frame_data.mutex);
 }
@@ -521,20 +523,40 @@ void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_rem
 void rotate_frames() {
 	pthread_mutex_lock(&g_frame_data.mutex);
 
-	// Update timestamps
-	g_frame_data.previous_frame_tv = g_frame_data.current_frame_tv;
-	g_frame_data.current_frame_tv = g_frame_data.next_frame_tv;
+	buffer_pixel_t* temp = NULL;
 
-	// Copy data
-	buffer_pixel_t* temp = g_frame_data.previous_frame_data;
-	g_frame_data.previous_frame_data = g_frame_data.current_frame_data;
-	g_frame_data.current_frame_data = g_frame_data.next_frame_data;
-	g_frame_data.next_frame_data = temp;
+	g_frame_data.has_prev_frame = FALSE;
 
-	g_frame_data.has_next_frame = FALSE;
+	if (g_frame_data.has_current_frame) {
+		g_frame_data.previous_frame_tv = g_frame_data.current_frame_tv;
+
+		temp = g_frame_data.previous_frame_data;
+		g_frame_data.previous_frame_data = g_frame_data.current_frame_data;
+		g_frame_data.current_frame_data = temp;
+
+		g_frame_data.has_prev_frame = TRUE;
+		g_frame_data.has_current_frame = FALSE;
+	}
+
+	if (g_frame_data.has_next_frame) {
+		g_frame_data.current_frame_tv = g_frame_data.next_frame_tv;
+
+		temp = g_frame_data.current_frame_data;
+		g_frame_data.current_frame_data = g_frame_data.next_frame_data;
+		g_frame_data.next_frame_data = temp;
+
+		g_frame_data.has_current_frame = TRUE;
+		g_frame_data.has_next_frame = FALSE;
+	}
 
 	// Update the delta time stamp
-	timersub(&g_frame_data.current_frame_tv, &g_frame_data.previous_frame_tv, &g_frame_data.prev_current_delta_tv);
+	if (g_frame_data.has_current_frame && g_frame_data.has_prev_frame) {
+		timersub(
+			&g_frame_data.current_frame_tv,
+			&g_frame_data.previous_frame_tv,
+			&g_frame_data.prev_current_delta_tv
+		);
+	}
 
 	pthread_mutex_unlock(&g_frame_data.mutex);
 }
@@ -559,7 +581,7 @@ void* render_thread(void* unused_data)
 	struct timeval frame_progress_tv, now_tv;
 	uint16_t frame_progress16, inv_frame_progress16;
 
-	const unsigned report_interval = 1;
+	const unsigned report_interval = 10;
 	unsigned last_report = 0;
 	unsigned long delta_sum = 0;
 	unsigned frames = 0;
@@ -570,19 +592,18 @@ void* render_thread(void* unused_data)
 	for(;;) {
 		pthread_mutex_lock(&g_frame_data.mutex);
 
-		// Skip frames if there isn't enough data
-		if (g_frame_data.frame_count < 3) {
-			printf("[render] Awaiting sufficient data...\n");
-			pthread_mutex_unlock(&g_frame_data.mutex);
-			usleep(2e6);
-			continue;
-		}
-
-		// Skip frames if LEDscape isn't initialized
+		// Wait until LEDscape is initialized
 		if (g_frame_data.leds == NULL) {
 			printf("[render] Awaiting server initialization...\n");
 			pthread_mutex_unlock(&g_frame_data.mutex);
-			usleep(2e6);
+			usleep(1e6 /* 1s */);
+			continue;
+		}
+
+		// Skip frames if there isn't enough data
+		if (!g_frame_data.has_prev_frame || !g_frame_data.has_current_frame) {
+			pthread_mutex_unlock(&g_frame_data.mutex);
+			usleep(10e3 /* 10ms */);
 			continue;
 		}
 
@@ -599,12 +620,16 @@ void* render_thread(void* unused_data)
 			uint8_t has_next_frame = g_frame_data.has_next_frame;
 			pthread_mutex_unlock(&g_frame_data.mutex);
 
-			if (has_next_frame) {
-			// If we have more data, rotate it in.
+			// This should only happen in a final frame case -- to avoid early switching (and some nasty resulting
+			// artifacts) we only force frame rotation if the next frame is really late.
+			if (has_next_frame && frame_progress_us > last_frame_time_us*2) {
+				// If we have more data, rotate it in.
+				//printf("Need data: rotating in; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
 				rotate_frames();
 			} else {
 				// Otherwise sleep for a moment and wait for more data
-				usleep(1000);
+				//printf("Need data: none available; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
+				usleep(1e3);
 			}
 
 			continue;
@@ -615,8 +640,8 @@ void* render_thread(void* unused_data)
 
 		if (frame_progress_tv.tv_sec > 5) {
 			printf("[render] No data for 5 seconds; suspending render thread.\n");
-			g_frame_data.frame_count = 0;
 			pthread_mutex_unlock(&g_frame_data.mutex);
+			usleep(100e3 /* 100ms */);
 			continue;
 		}
 
@@ -877,13 +902,13 @@ void* demo_thread(void* unused_data)
 		// Enable/disable demo mode and log
 		if (delta_tv.tv_sec > 5) {
 			if (! demo_enabled) {
-				printf("[demo] Enabling Demo Mode\n");
+				printf("[demo] Starting Demo\n");
 			}
 
 			demo_enabled = TRUE;
 		} else {
 			if (demo_enabled) {
-				printf("[demo] Disabling Demo Mode\n");
+				printf("[demo] Stopping Demo\n");
 			}
 
 			demo_enabled = FALSE;
