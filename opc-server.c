@@ -606,9 +606,9 @@ void* render_thread(void* unused_data)
 				// we use temporary variables, r, g, and b. It probably has to do with things being loaded into the CPU cache
 				// when read, as such, don't read pixel_out from here.
 				if (dithering_enabled) {
-					pixel_in_overflow->r = (int16_t)interpolatedR - (r * 257);
-					pixel_in_overflow->g = (int16_t)interpolatedG - (g * 257);
-					pixel_in_overflow->b = (int16_t)interpolatedB - (b * 257);
+					pixel_in_overflow->r = (int16_t)ditheredR - (r * 257);
+					pixel_in_overflow->g = (int16_t)ditheredG - (g * 257);
+					pixel_in_overflow->b = (int16_t)ditheredB - (b * 257);
 				}
 			}
 		}
