@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <string.h>
 #include <math.h>
+#include <getopt.h>
 #include "util.h"
 #include "ledscape.h"
 
@@ -62,6 +63,7 @@ static struct {
 
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
+	uint8_t lut_enabled;
 
 	uint16_t redLookup[257];
 
@@ -71,14 +73,12 @@ static struct {
 
 	pthread_mutex_t mutex;
 } g_server_config = {
-	7890,
-	176,
-	TRUE,
-	TRUE,
-	{},
-	{},
-	{},
-	PTHREAD_MUTEX_INITIALIZER
+	.port = 7890,
+	.leds_per_strip = 176,
+	.interpolation_enabled = TRUE,
+	.dithering_enabled = TRUE,
+	.lut_enabled = TRUE,
+	.mutex = PTHREAD_MUTEX_INITIALIZER
 };
 
 typedef struct {
@@ -137,20 +137,32 @@ static struct
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // main()
+static struct option long_options[] =
+{
+    {"port", optional_argument, NULL, 'p'},
+    {"count", optional_argument, NULL, 'c'},
+    {"dimensions", optional_argument, NULL, 'd'},
+    {"no-interpolation", no_argument, NULL, 'i'},
+    {"no-dithering", no_argument, NULL, 't'},
+    {"no-lut", no_argument, NULL, 'l'},
+    {NULL, 0, NULL, 0}
+};
 int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt(argc, argv, "p:c:d:")) != -1)
+	while ((opt = getopt_long(argc, argv, "p:c:d:itl", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
-		case 'p':
+		case 'p': {
 			g_server_config.port = atoi(optarg);
-			break;
-		case 'c':
+		} break;
+
+		case 'c': {
 			g_server_config.leds_per_strip = atoi(optarg);
-			break;
+		} break;
+
 		case 'd': {
 			int width=0, height=0;
 
@@ -160,20 +172,32 @@ int main(int argc, char ** argv)
 				printf("Invalid argument for -d; expected NxN; actual: %s", optarg);
 				exit(EXIT_FAILURE);
 			}
-		}
-		break;
+		} break;
+
+		case 'i': {
+			g_server_config.interpolation_enabled = FALSE;
+		} break;
+
+		case 't': {
+			g_server_config.dithering_enabled = FALSE;
+		} break;
+
+		case 'l': {
+			g_server_config.lut_enabled = FALSE;
+		} break;
+
 		default:
-			fprintf(stderr, "Usage: %s [-p <port>] [-c <led_count> | -d <width>x<height>]\n", argv[0]);
+			fprintf(stderr, "Usage: %s [-p <port>] [-c <led_count> | -d <width>x<height>] [-i | --no-interpolation] [-t | --no-dithering] [-l | --no-lut]\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
 	}
 
 	// largest possible UDP packet
 	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
-		die("%u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
+		die("[main] %u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
 	}
 
-	fprintf(stderr, "Starting server on port %d for %d pixels on %d strips\n", g_server_config.port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS);
+	fprintf(stderr, "[main] Starting server on port %d for %d pixels on %d strips\n", g_server_config.port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS);
 
 	init_lookup_tables();
 
@@ -283,7 +307,7 @@ inline uint16_t lutInterpolate(uint16_t value, uint16_t* lut) {
 void* render_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "Starting render thread for %u total pixels\n", g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS);
+	fprintf(stderr, "[render] Starting render thread for %u total pixels\n", g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS);
 
 	// Timing Variables
 	struct timeval frame_progress_tv, now_tv;
@@ -307,8 +331,8 @@ void* render_thread(void* unused_data)
 	for(;;) {
 		// Skip frames if there isn't enough data
 		if (g_frame_data.frame_count < 3) {
-			usleep(1e6);
-			printf("Awaiting sufficient data...\n");
+			usleep(2e6);
+			printf("[render] Awaiting sufficient data...\n");
 			continue;
 		}
 
@@ -322,7 +346,7 @@ void* render_thread(void* unused_data)
 		inv_frame_progress16 = 0x10000 - frame_progress16;
 
 		if (frame_progress_tv.tv_sec > 5) {
-			printf("No data for 5 seconds; suspending render thread.\n");
+			printf("[render] No data for 5 seconds; suspending render thread.\n");
 			g_frame_data.frame_count = 0;
 			pthread_mutex_unlock(&g_frame_data.mutex);
 			continue;
@@ -350,8 +374,14 @@ void* render_thread(void* unused_data)
 		struct timeval start_tv, stop_tv, delta_tv;
 		gettimeofday(&start_tv, NULL);
 
+		// Check the server config for dithering and interpolation options
+		pthread_mutex_lock(&g_server_config.mutex);
+
 		// Only enable dithering if we're better than 100fps
-		uint8_t ditheringEnabled = delta_avg < 10000;
+		uint8_t dithering_enabled = (delta_avg < 10000) && g_server_config.dithering_enabled;
+		uint8_t interpolation_enabled = g_server_config.interpolation_enabled;
+		uint8_t lut_enabled = g_server_config.lut_enabled;
+		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
 		uint32_t maxDitherFrames = 16666 / delta_avg;
@@ -364,21 +394,34 @@ void* render_thread(void* unused_data)
 
 				ledscape_pixel_t* const pixel_out = & frame[led_index].strip[strip_index];
 
+				int32_t interpolatedR;
+				int32_t interpolatedG;
+				int32_t interpolatedB;
+
 				// Interpolate
-				int32_t interpolatedR = (pixel_in_prev->r*inv_frame_progress16 + pixel_in_current->r*frame_progress16) >> 8;
-				int32_t interpolatedG = (pixel_in_prev->g*inv_frame_progress16 + pixel_in_current->g*frame_progress16) >> 8;
-				int32_t interpolatedB = (pixel_in_prev->b*inv_frame_progress16 + pixel_in_current->b*frame_progress16) >> 8;
+				if (interpolation_enabled) {
+					interpolatedR = (pixel_in_prev->r*inv_frame_progress16 + pixel_in_current->r*frame_progress16) >> 8;
+					interpolatedG = (pixel_in_prev->g*inv_frame_progress16 + pixel_in_current->g*frame_progress16) >> 8;
+					interpolatedB = (pixel_in_prev->b*inv_frame_progress16 + pixel_in_current->b*frame_progress16) >> 8;
+				} else {
+					interpolatedR = pixel_in_current->r << 8;
+					interpolatedG = pixel_in_current->g << 8;
+					interpolatedB = pixel_in_current->b << 8;
+				}
 
 				// Apply LUT
-				interpolatedR = lutInterpolate(interpolatedR, g_server_config.redLookup);
-				interpolatedG = lutInterpolate(interpolatedG, g_server_config.greenLookup);
-				interpolatedB = lutInterpolate(interpolatedB, g_server_config.blueLookup);
+				if (lut_enabled) {
+					interpolatedR = lutInterpolate(interpolatedR, g_server_config.redLookup);
+					interpolatedG = lutInterpolate(interpolatedG, g_server_config.greenLookup);
+					interpolatedB = lutInterpolate(interpolatedB, g_server_config.blueLookup);
+				}
 
 				// if (data_index == 0) {
 				// 	printf("%d\n", abs(abs(pixel_in_overflow->lastEffectFrame) - abs(ditheringFrame)));
 				// }
 
-				// Reset the dithering if it's been too long
+				// Reset dithering for this pixel if it's been too long since it actually changed anything. This serves to prevent
+				// visible blinking pixels.
 				if (abs(abs(pixel_in_overflow->lastEffectFrame) - abs(ditheringFrame)) > maxDitherFrames) {
 					pixel_in_overflow->r = pixel_in_overflow->g = pixel_in_overflow->b = 0;
 					pixel_in_overflow->lastEffectFrame = ditheringFrame;
@@ -389,7 +432,7 @@ void* render_thread(void* unused_data)
 				int32_t	ditheredG = interpolatedG;
 				int32_t	ditheredB = interpolatedB;
 
-				if (ditheringEnabled) {
+				if (dithering_enabled) {
 					ditheredR += pixel_in_overflow->r;
 					ditheredG += pixel_in_overflow->g;
 					ditheredB += pixel_in_overflow->b;
@@ -410,9 +453,11 @@ void* render_thread(void* unused_data)
 				// NOTE: For some strange reason, reading the values from pixel_out causes strange memory corruption. As such
 				// we use temporary variables, r, g, and b. It probably has to do with things being loaded into the CPU cache
 				// when read, as such, don't read pixel_out from here.
-				pixel_in_overflow->r = (int16_t)interpolatedR - (r * 257);
-				pixel_in_overflow->g = (int16_t)interpolatedG - (g * 257);
-				pixel_in_overflow->b = (int16_t)interpolatedB - (b * 257);
+				if (dithering_enabled) {
+					pixel_in_overflow->r = (int16_t)interpolatedR - (r * 257);
+					pixel_in_overflow->g = (int16_t)interpolatedG - (g * 257);
+					pixel_in_overflow->b = (int16_t)interpolatedB - (b * 257);
+				}
 			}
 		}
 
@@ -433,11 +478,14 @@ void* render_thread(void* unused_data)
 		last_report = stop_tv.tv_sec;
 
 		delta_avg = delta_sum / frames;
-		printf("%6u usec avg, max %.2f fps, actual %.2f fps (over %u frames)\n",
+		printf("[render] %6u usec avg, max %.2f fps, actual %.2f fps (over %u frames); (config: interp=%u, dither=%u, lut=%u)\n",
 			delta_avg,
 			report_interval * 1.0e6 / delta_avg,
 			frames * 1.0 / report_interval,
-			frames
+			frames,
+			interpolation_enabled,
+			dithering_enabled,
+			lut_enabled
 		);
 
 		frames = delta_sum = 0;
@@ -543,27 +591,27 @@ void* tcp_server_thread(void* unused_data)
 
 
 	pthread_mutex_lock(&g_server_config.mutex);
-	fprintf(stderr, "Starting TCP server on port %d\n", g_server_config.port);
+	fprintf(stderr, "[tcp] Starting TCP server on port %d\n", g_server_config.port);
 
 	const int sock = tcp_socket(g_server_config.port);
 	pthread_mutex_unlock(&g_server_config.mutex);
 
 	if (sock < 0)
-		die("socket port %d failed: %s\n", g_server_config.port, strerror(errno));
+		die("[tcp] socket port %d failed: %s\n", g_server_config.port, strerror(errno));
 
 	uint8_t buf[65536];
 
 	int fd;
 	while ((fd = accept(sock, NULL, NULL)) >= 0)
 	{
-		printf("Client connected!");
+		printf("[tcp] Client connected!\n");
 
 		while(1)
 		{
 			opc_cmd_t cmd;
 			ssize_t rlen = read(fd, &cmd, sizeof(cmd));
 			if (rlen < 0)
-				die("recv failed: %s\n", strerror(errno));
+				die("[tcp] recv failed: %s\n", strerror(errno));
 			if (rlen == 0)
 			{
 				close(fd);
@@ -579,7 +627,7 @@ void* tcp_server_thread(void* unused_data)
 			{
 				rlen = read(fd, buf + offset, cmd_len - offset);
 				if (rlen < 0)
-					die("recv failed: %s\n", strerror(errno));
+					die("[tcp] recv failed: %s\n", strerror(errno));
 				if (rlen == 0)
 					break;
 				offset += rlen;
@@ -598,7 +646,7 @@ void* tcp_server_thread(void* unused_data)
 						opc_ledscape_config_t* config_cmd = &buf[3];
 						uint16_t new_led_count = config_cmd->len_hi << 8 | config_cmd->len_lo;
 
-						warn("Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)\n", new_led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
+						warn("[tcp] Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)\n", new_led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
 
 						// TODO: Implement configuration updating
 					} else if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
@@ -612,13 +660,13 @@ void* tcp_server_thread(void* unused_data)
 
 						pthread_mutex_unlock(&g_frame_data.mutex);
 
-						warn("Responding to config request\n");
+						warn("[tcp] Responding to config request\n");
 						write(fd, &config, sizeof(config));
 					} else {
-						warn("WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+						warn("[tcp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
 					}
 				} else {
-					warn("WARN: Received command for unsupported system-id: %d\n", (int)system_id);
+					warn("[tcp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);
 				}
 			}
 		}
