@@ -20,6 +20,8 @@
 #include "util.h"
 #include "ledscape.h"
 
+#include "lib/cesanta/net_skeleton.h"
+
 #include <pthread.h>
 
 // TODO:
@@ -144,7 +146,7 @@ static struct
 	.current_frame_data = (buffer_pixel_t*)NULL,
 	.next_frame_data = (buffer_pixel_t*)NULL,
 	.has_next_frame = FALSE,
-	.frame_dithering_overflow = (buffer_pixel_t*)NULL,
+	.frame_dithering_overflow = (pixel_delta_t*)NULL,
 	.frame_size = 0,
 	.frame_count = 0,
 	.mutex = PTHREAD_MUTEX_INITIALIZER,
@@ -345,7 +347,7 @@ void build_lookup_tables() {
 		g_server_config.white_point.blue
 	};
 
-	uint16_t* lookup_tables[] = {
+	uint32_t* lookup_tables[] = {
 		g_frame_data.red_lookup,
 		g_frame_data.green_lookup,
 		g_frame_data.blue_lookup
@@ -456,7 +458,7 @@ void rotate_frames() {
 	pthread_mutex_unlock(&g_frame_data.mutex);
 }
 
-inline uint16_t lutInterpolate(uint16_t value, uint16_t* lut) {
+inline uint16_t lutInterpolate(uint16_t value, uint32_t* lut) {
 	// Inspired by FadeCandy: https://github.com/scanlime/fadecandy/blob/master/firmware/fc_pixel_lut.cpp
 
 	uint16_t index = value >> 8; // Range [0, 0xFF]
@@ -708,9 +710,7 @@ void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
 		 This looks the most natural.
 	*/
 
-	int r;
-	int g;
-	int b;
+	int r=0, g=0, b=0;
 	int base;
 
 	if (sat == 0) { // Achromatic color (gray). Hue doesn't mind.
@@ -765,12 +765,10 @@ void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
 void* demo_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "Starting demo data thread\n", g_server_config.udp_port);
+	fprintf(stderr, "Starting demo data thread\n");
 
 	uint8_t* buffer = NULL;
 	uint32_t buffer_size = 0;
-
-	uint8_t rgb[3];
 
 	struct timeval now_tv, delta_tv;
 	uint8_t demo_enabled = FALSE;
@@ -865,98 +863,86 @@ void* udp_server_thread(void* unused_data)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TCP Server
-static int
-tcp_socket(
-	const int port
-)
-{
-	const int sock = socket(AF_INET6, SOCK_STREAM, 0);
-	struct sockaddr_in6 addr = {
-		.sin6_family = AF_INET6,
-		.sin6_port = htons(port),
-		.sin6_addr = in6addr_any,
-	};
+static void event_handler(struct ns_connection *conn, enum ns_event ev, void *event_param) {
+	struct iobuf *io = &conn->recv_iobuf; // IO buffer that holds received message
 
-	if (sock < 0)
-		return -1;
-	if (bind(sock, (const struct sockaddr*) &addr, sizeof(addr)) < 0)
-		return -1;
-	if (listen(sock, 5) == -1)
-		return -1;
+	switch (ev) {
+		case NS_RECV: {
+			// Enough data for an OPC command header?
+			if (io->len >= sizeof(opc_cmd_t)) {
+				opc_cmd_t* cmd = (opc_cmd_t*) io->buf;
+				const size_t cmd_len = cmd->len_hi << 8 | cmd->len_lo;
 
-	return sock;
+				uint8_t* opc_cmd_payload = ((uint8_t*)io->buf) + sizeof(opc_cmd_t);
+
+				// Enough data for the entire command?
+				if (io->len >= sizeof(opc_cmd_t) + cmd_len) {
+					if (cmd->command == 0) {
+						set_next_frame_data(opc_cmd_payload, cmd_len, TRUE);
+					} else if (cmd->command == 255) {
+						// System specific commands
+						const uint16_t system_id = opc_cmd_payload[0] << 8 | opc_cmd_payload[1];
+
+						if (system_id == OPC_SYSID_LEDSCAPE) {
+							const opc_ledscape_cmd_id_t ledscape_cmd_id = opc_cmd_payload[2];
+
+							 if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+								warn("[tcp] Responding to config request\n");
+								ns_send(conn, g_server_config.json, strlen(g_server_config.json)+1);
+							} else {
+								warn("[tcp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+							}
+						} else {
+							warn("[tcp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);
+						}
+					}
+
+					// Removed the processed command from the buffer
+					iobuf_remove(io, sizeof(opc_cmd_t) + cmd_len);
+				}
+			}
+
+			// Fallback to handle misformed data. Clear the io buffer if we have more
+			// than 100k waiting.
+			if (io->len > 1e5) {
+				iobuf_remove(io, io->len);
+			}
+		} break;
+
+		case NS_ACCEPT: {
+			char buffer[INET6_ADDRSTRLEN];
+			ns_sock_to_str(conn->sock, buffer, sizeof(buffer), 1);
+			printf("[tcp] Connection from %s\n", buffer);
+		} break;
+
+		default:
+		break;    // We ignore all other events
+	}
 }
 
 void* tcp_server_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
 
+	struct ns_server server;
+	char s_bind_addr[128];
 
 	pthread_mutex_lock(&g_server_config.mutex);
-	fprintf(stderr, "[tcp] Starting TCP server on port %d\n", g_server_config.tcp_port);
-
-	const int sock = tcp_socket(g_server_config.tcp_port);
+	sprintf(s_bind_addr, "[::]:%d", g_server_config.tcp_port);
 	pthread_mutex_unlock(&g_server_config.mutex);
 
-	if (sock < 0)
-		die("[tcp] socket port %d failed: %s\n", g_server_config.tcp_port, strerror(errno));
-
-	uint8_t buf[65536];
-
-	int fd;
-	while ((fd = accept(sock, NULL, NULL)) >= 0)
-	{
-		printf("[tcp] Client connected!\n");
-
-		while(1)
-		{
-			opc_cmd_t cmd;
-			ssize_t rlen = read(fd, &cmd, sizeof(cmd));
-			if (rlen < 0)
-				die("[tcp] recv failed: %s\n", strerror(errno));
-			if (rlen == 0)
-			{
-				close(fd);
-				break;
-			}
-
-			const size_t cmd_len = cmd.len_hi << 8 | cmd.len_lo;
-
-			//warn("cmd=%d; size=%zu\n", cmd.command, cmd_len);
-
-			size_t offset = 0;
-			while (offset < cmd_len)
-			{
-				rlen = read(fd, buf + offset, cmd_len - offset);
-				if (rlen < 0)
-					die("[tcp] recv failed: %s\n", strerror(errno));
-				if (rlen == 0)
-					break;
-				offset += rlen;
-			}
-
-			if (cmd.command == 0) {
-				set_next_frame_data(buf, cmd_len, TRUE);
-			} else if (cmd.command == 255) {
-				// System specific commands
-				const uint16_t system_id = buf[0] << 8 | buf[1];
-
-				if (system_id == OPC_SYSID_LEDSCAPE) {
-					const opc_ledscape_cmd_id_t ledscape_cmd_id = buf[2];
-
-					 if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
-
-						warn("[tcp] Responding to config request\n");
-						write(fd, g_server_config.json, strlen(g_server_config.json)+1);
-					} else {
-						warn("[tcp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
-					}
-				} else {
-					warn("[tcp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);
-				}
-			}
-		}
+	// Initialize server and open listening port
+	ns_server_init(&server, NULL, event_handler);
+	int port = ns_bind(&server, s_bind_addr);
+	if (port < 0) {
+		printf("Failed to bind to port %s: %d\n", s_bind_addr, port);
+		exit(-1);
 	}
 
+	printf("[tcp] Starting TCP server on %d\n", port);
+	for (;;) {
+		ns_server_poll(&server, 1000);
+	}
+	ns_server_free(&server);
 	pthread_exit(NULL);
 }

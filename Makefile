@@ -7,7 +7,7 @@ TARGETS += udp-rx
 TARGETS += opc-rx
 TARGETS += opc-server
 
-LEDSCAPE_OBJS = ledscape.o pru.o util.o
+LEDSCAPE_OBJS = ledscape.o pru.o util.o lib/cesanta/frozen.o lib/cesanta/mongoose.o
 LEDSCAPE_LIB := libledscape.a
 
 all: $(TARGETS) dmx_0.bin ws281x_0.bin ws281x_1.bin
@@ -39,6 +39,8 @@ CFLAGS += \
 	-lm \
 	-mtune=cortex-a8 \
 	-march=armv7-a \
+	-Wunused-parameter \
+	-DNS_ENABLE_IPV6
 
 LDFLAGS += \
 
@@ -96,7 +98,9 @@ clean:
 		$(INCDIR_APP_LOADER)/*~ \
 		$(TARGETS) \
 		*.bin \
-
+		lib/cesanta/.*.o.d \
+		lib/cesanta/*.i \
+		lib/cesanta/*.o
 
 ###########
 #
