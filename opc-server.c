@@ -21,6 +21,15 @@
 
 #include <pthread.h>
 
+// TODO:
+// Server:
+// 	- ip-stack Agnostic socket stuff
+//  - UDP receiver
+// Config:
+//  - White-balance, curve adjustment
+//  - Respecting interpolation and dithering settings
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES
 #define TRUE 1
@@ -104,6 +113,8 @@ static struct
 
 	struct timeval prev_current_delta_tv;
 
+	ledscape_t * leds;
+
 	pthread_mutex_t mutex;
 } g_frame_data = {
 	.previous_frame_data = (buffer_pixel_t*)NULL,
@@ -112,7 +123,8 @@ static struct
 	.frame_dithering_overflow = (buffer_pixel_t*)NULL,
 	.frame_size = 0,
 	.frame_count = 0,
-	.mutex = PTHREAD_MUTEX_INITIALIZER
+	.mutex = PTHREAD_MUTEX_INITIALIZER,
+	.leds = NULL
 };
 
 static struct
@@ -278,7 +290,11 @@ void* render_thread(void* unused_data)
 	uint16_t frame_progress16, inv_frame_progress16;
 
 	// Init LEDscape
-	ledscape_t * const leds = ledscape_init(g_server_config.leds_per_strip);
+	pthread_mutex_lock(&g_frame_data.mutex);
+	pthread_mutex_lock(&g_server_config.mutex);
+	g_frame_data.leds = ledscape_init(g_server_config.leds_per_strip);
+	pthread_mutex_unlock(&g_server_config.mutex);
+	pthread_mutex_unlock(&g_frame_data.mutex);
 
 	const unsigned report_interval = 1;
 	unsigned last_report = 0;
@@ -286,13 +302,13 @@ void* render_thread(void* unused_data)
 	unsigned frames = 0;
 	uint32_t delta_avg = 2000;
 
-
 	uint8_t buffer_index = 0;
 	int8_t ditheringFrame = 0;
 	for(;;) {
 		// Skip frames if there isn't enough data
 		if (g_frame_data.frame_count < 3) {
-			usleep(10000);
+			usleep(1e6);
+			printf("Awaiting sufficient data...\n");
 			continue;
 		}
 
@@ -305,6 +321,13 @@ void* render_thread(void* unused_data)
 		frame_progress16 = (((uint64_t)frame_progress_tv.tv_sec*1000000 + frame_progress_tv.tv_usec) << 16) / (g_frame_data.prev_current_delta_tv.tv_sec*1000000 + g_frame_data.prev_current_delta_tv.tv_usec);
 		inv_frame_progress16 = 0x10000 - frame_progress16;
 
+		if (frame_progress_tv.tv_sec > 5) {
+			printf("No data for 5 seconds; suspending render thread.\n");
+			g_frame_data.frame_count = 0;
+			pthread_mutex_unlock(&g_frame_data.mutex);
+			continue;
+		}
+
 		// printf("%d of %d (%d)\n",
 		// 	(frame_progress_tv.tv_sec*1000000 + frame_progress_tv.tv_usec) ,
 		// 	(g_frame_data.prev_current_delta_tv.tv_sec*1000000 + g_frame_data.prev_current_delta_tv.tv_usec),
@@ -313,7 +336,7 @@ void* render_thread(void* unused_data)
 
 		// Setup LEDscape for this frame
 		buffer_index = (buffer_index+1)%2;
-		ledscape_frame_t * const frame = ledscape_frame(leds, buffer_index);
+		ledscape_frame_t * const frame = ledscape_frame(g_frame_data.leds, buffer_index);
 
 		// Build the render frame
 		uint16_t led_count = g_frame_data.frame_size;
@@ -393,11 +416,11 @@ void* render_thread(void* unused_data)
 			}
 		}
 
-		pthread_mutex_unlock(&g_frame_data.mutex);
-
 		// Render the frame
-		ledscape_wait(leds);
-		ledscape_draw(leds, buffer_index);
+		ledscape_wait(g_frame_data.leds);
+		ledscape_draw(g_frame_data.leds, buffer_index);
+
+		pthread_mutex_unlock(&g_frame_data.mutex);
 
 		// Output Timing Info
 		gettimeofday(&stop_tv, NULL);
@@ -420,7 +443,7 @@ void* render_thread(void* unused_data)
 		frames = delta_sum = 0;
 	}
 
-	ledscape_close(leds);
+	ledscape_close(g_frame_data.leds);
 	pthread_exit(NULL);
 }
 
@@ -445,7 +468,8 @@ typedef enum
 
 typedef enum
 {
-	OPC_LEDSCAPE_CMD_SET_CONFIG = 0
+	OPC_LEDSCAPE_CMD_SET_CONFIG = 0,
+	OPC_LEDSCAPE_CMD_GET_CONFIG = 1
 } opc_ledscape_cmd_id_t;
 
 typedef struct
@@ -455,11 +479,12 @@ typedef struct
 
 	uint8_t pru0_mode;
 	uint8_t pru1_mode;
-} opc_ledscape_set_config_t;
+} opc_ledscape_config_t;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // UDP Server
+//
 
 void* udp_server_thread(void* unused_data)
 {
@@ -471,19 +496,19 @@ void* udp_server_thread(void* unused_data)
 	uint8_t* data = malloc(count);
 
 	uint8_t offset = 0;
-	for (;;) {
-		offset++;
+	// for (;;) {
+	// 	offset++;
 
-		for (uint32_t i=0; i<count; i+=3) {
-			// data[i] = (i + offset) % 64;
-			// data[i+1] = (i + offset + 256/3) % 64;
-			// data[i+2] = (i + offset + 512/3) % 64;
-			data[i] = data[i+1] = data[i+2] = (offset%2==0) ? 0 : 32;
-		}
+	// 	for (uint32_t i=0; i<count; i+=3) {
+	// 		// data[i] = (i + offset) % 64;
+	// 		// data[i+1] = (i + offset + 256/3) % 64;
+	// 		// data[i+2] = (i + offset + 512/3) % 64;
+	// 		data[i] = data[i+1] = data[i+2] = (offset%2==0) ? 0 : 32;
+	// 	}
 
-		set_next_frame_data(data, count);
-		usleep(1000000);
-	}
+	// 	set_next_frame_data(data, count);
+	// 	usleep(1000000);
+	// }
 
 	pthread_exit(NULL);
 }
@@ -495,11 +520,11 @@ tcp_socket(
 	const int port
 )
 {
-	const int sock = socket(AF_INET, SOCK_STREAM, 0);
-	struct sockaddr_in addr = {
-		.sin_family = AF_INET,
-		.sin_port = htons(port),
-		.sin_addr.s_addr = INADDR_ANY,
+	const int sock = socket(AF_INET6, SOCK_STREAM, 0);
+	struct sockaddr_in6 addr = {
+		.sin6_family = AF_INET6,
+		.sin6_port = htons(port),
+		.sin6_addr = in6addr_any,
 	};
 
 	if (sock < 0)
@@ -514,71 +539,90 @@ tcp_socket(
 
 void* tcp_server_thread(void* unused_data)
 {
-	// unused_data=unused_data; // Suppress Warnings
-	// fprintf(stderr, "Starting TCP server on port %d\n", g_server_config.port);
+	unused_data=unused_data; // Suppress Warnings
 
-	// const int sock = tcp_socket(g_server_config.port);
-	// if (sock < 0)
-	// 	die("socket port %d failed: %s\n", port, strerror(errno));
 
-	// uint8_t buf[65536];
+	pthread_mutex_lock(&g_server_config.mutex);
+	fprintf(stderr, "Starting TCP server on port %d\n", g_server_config.port);
 
-	// while ((fd = accept(sock, NULL, NULL)) >= 0)
-	// {
-	// 	printf("Client connected!");
+	const int sock = tcp_socket(g_server_config.port);
+	pthread_mutex_unlock(&g_server_config.mutex);
 
-	// 	while(1)
-	// 	{
-	// 		opc_cmd_t cmd;
-	// 		ssize_t rlen = read(fd, &cmd, sizeof(cmd));
-	// 		if (rlen < 0)
-	// 			die("recv failed: %s\n", strerror(errno));
-	// 		if (rlen == 0)
-	// 		{
-	// 			close(fd);
-	// 			break;
-	// 		}
+	if (sock < 0)
+		die("socket port %d failed: %s\n", g_server_config.port, strerror(errno));
 
-	// 		const size_t cmd_len = cmd.len_hi << 8 | cmd.len_lo;
+	uint8_t buf[65536];
 
-	// 		//warn("cmd=%d; size=%zu\n", cmd.command, cmd_len);
+	int fd;
+	while ((fd = accept(sock, NULL, NULL)) >= 0)
+	{
+		printf("Client connected!");
 
-	// 		size_t offset = 0;
-	// 		while (offset < cmd_len)
-	// 		{
-	// 			rlen = read(fd, buf + offset, cmd_len - offset);
-	// 			if (rlen < 0)
-	// 				die("recv failed: %s\n", strerror(errno));
-	// 			if (rlen == 0)
-	// 				break;
-	// 			offset += rlen;
-	// 		}
+		while(1)
+		{
+			opc_cmd_t cmd;
+			ssize_t rlen = read(fd, &cmd, sizeof(cmd));
+			if (rlen < 0)
+				die("recv failed: %s\n", strerror(errno));
+			if (rlen == 0)
+			{
+				close(fd);
+				break;
+			}
 
-	// 		if (cmd.command == 0) {
-	// 			set_next_frame_data(buf, cmd_len);
-	// 		} else if (cmd.command == 255) {
-	// 			// System specific commands
-	// 			const uint16_t system_id = buf[0] << 8 | buf[1];
+			const size_t cmd_len = cmd.len_hi << 8 | cmd.len_lo;
 
-	// 			if (system_id == OPC_SYSID_LEDSCAPE) {
-	// 				const opc_ledscape_cmd_id_t ledscape_cmd_id = buf[2];
+			//warn("cmd=%d; size=%zu\n", cmd.command, cmd_len);
 
-	// 				if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_SET_CONFIG) {
-	// 					opc_ledscape_set_config_t* config_cmd = &buf[3];
-	// 					led_count = config_cmd->len_hi << 8 | config_cmd->len_lo;
+			size_t offset = 0;
+			while (offset < cmd_len)
+			{
+				rlen = read(fd, buf + offset, cmd_len - offset);
+				if (rlen < 0)
+					die("recv failed: %s\n", strerror(errno));
+				if (rlen == 0)
+					break;
+				offset += rlen;
+			}
 
-	// 					warn("Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)", led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
+			if (cmd.command == 0) {
+				set_next_frame_data(buf, cmd_len);
+			} else if (cmd.command == 255) {
+				// System specific commands
+				const uint16_t system_id = buf[0] << 8 | buf[1];
 
-	// 					// TODO: Implement configuration updating
-	// 				} else {
-	// 					warn("WARN: Received command for unsupported LEDscape Command: %d", (int)ledscape_cmd_id);
-	// 				}
-	// 			} else {
-	// 				warn("WARN: Received command for unsupported system-id: %d", (int)system_id);
-	// 			}
-		// 	}
-		// }
-//	}
+				if (system_id == OPC_SYSID_LEDSCAPE) {
+					const opc_ledscape_cmd_id_t ledscape_cmd_id = buf[2];
+
+					if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_SET_CONFIG) {
+						opc_ledscape_config_t* config_cmd = &buf[3];
+						uint16_t new_led_count = config_cmd->len_hi << 8 | config_cmd->len_lo;
+
+						warn("Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)\n", new_led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
+
+						// TODO: Implement configuration updating
+					} else if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+						pthread_mutex_lock(&g_frame_data.mutex);
+
+						opc_ledscape_config_t config;
+						config.len_hi = (g_frame_data.leds->num_pixels >> 8) & 0xFF;
+						config.len_lo = g_frame_data.leds->num_pixels & 0xFF;
+						config.pru0_mode = g_frame_data.leds->pru0_mode;
+						config.pru1_mode = g_frame_data.leds->pru1_mode;
+
+						pthread_mutex_unlock(&g_frame_data.mutex);
+
+						warn("Responding to config request\n");
+						write(fd, &config, sizeof(config));
+					} else {
+						warn("WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+					}
+				} else {
+					warn("WARN: Received command for unsupported system-id: %d\n", (int)system_id);
+				}
+			}
+		}
+	}
 
 	pthread_exit(NULL);
 }
