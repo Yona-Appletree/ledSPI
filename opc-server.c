@@ -520,7 +520,7 @@ void* render_thread(void* unused_data)
 		}
 
 		frame_progress16 = (frame_progress_us << 16) / last_frame_time_us;
-		inv_frame_progress16 = 0x10000 - frame_progress16;
+		inv_frame_progress16 = 0xFFFF - frame_progress16;
 
 		if (frame_progress_tv.tv_sec > 5) {
 			printf("[render] No data for 5 seconds; suspending render thread.\n");
@@ -775,7 +775,7 @@ void* demo_thread(void* unused_data)
 	struct timeval now_tv, delta_tv;
 	uint8_t demo_enabled = FALSE;
 
-	for (uint16_t i = 0; /*ever*/; i+=8) {
+	for (uint16_t i = 0; /*ever*/; i+=4) {
 		// Calculate time since last remote data
 		pthread_mutex_lock(&g_frame_data.mutex);
 		gettimeofday(&now_tv, NULL);
