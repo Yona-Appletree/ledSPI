@@ -29,7 +29,7 @@ static void ledscape_fill_color(
 
 int main (void)
 {
-	const int num_pixels = 256;
+	const int num_pixels = 176;
 	ledscape_t * const leds = ledscape_init(num_pixels);
 	time_t last_time = time(NULL);
 	unsigned last_i = 0;
@@ -64,9 +64,9 @@ int main (void)
 			for (unsigned p = 0 ; p < num_pixels; p++)
 			{
 				HSBtoRGB(
-					((i + (p*360)/num_pixels) % 360),
-					100,
-					200 - (((i/10) + (p*150)/num_pixels) % 150),
+					((i + ((p + strip*num_pixels)*360)/(num_pixels*10)) % 360),
+					200,
+					255 - (((i/10) + (p*150)/num_pixels + strip*10) % 150),
 					rgb
 				);
 

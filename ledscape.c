@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include "ledscape.h"
-#include "pru.h"
 
 
 /** GPIO pins used by the LEDscape.
@@ -53,7 +52,7 @@ static const uint8_t gpios3[] = {
  *
  * Changing this requires changes in ws281x.p
  */
-typedef struct
+typedef struct ws281x_command
 {
 	// in the DDR shared with the PRU
 	uintptr_t pixels_dma;
@@ -69,17 +68,6 @@ typedef struct
 } __attribute__((__packed__)) ws281x_command_t;
 
 
-struct ledscape
-{
-	ws281x_command_t * ws281x_0;
-	ws281x_command_t * ws281x_1;
-	pru_t * pru0;
-	pru_t * pru1;
-	unsigned num_pixels;
-	size_t frame_size;
-};
-
-
 /** Retrieve one of the two frame buffers. */
 ledscape_frame_t *
 ledscape_frame(
@@ -92,7 +80,7 @@ ledscape_frame(
 
 	return (ledscape_frame_t*)((uint8_t*) leds->pru0->ddr + leds->frame_size * frame);
 }
-	
+
 
 /** Initiate the transfer of a frame to the LED strips */
 void
@@ -129,7 +117,7 @@ ledscape_wait(
 		uint32_t response0 = leds->ws281x_0->response;
 		uint32_t response1 = leds->ws281x_1->response;
 
-		// printf("pru0: (%d,%d), pru1: (%d,%d)\n", 
+		// printf("pru0: (%d,%d), pru1: (%d,%d)\n",
 		// 	leds->ws281x_0->command, leds->ws281x_0->response,
 		// 	leds->ws281x_1->command, leds->ws281x_1->response
 		// );
@@ -176,8 +164,10 @@ ledscape_init_with_modes(
 		.pru1		= pru1,
 		.num_pixels	= num_pixels,
 		.frame_size	= frame_size,
+		.pru0_mode  = pru0_mode,
+		.pru1_mode  = pru1_mode,
 		.ws281x_0	= pru0->data_ram,
-		.ws281x_1	= pru1->data_ram,
+		.ws281x_1	= pru1->data_ram
 	};
 
 	*(leds->ws281x_0) = *(leds->ws281x_1) = (ws281x_command_t) {
@@ -202,7 +192,7 @@ ledscape_init_with_modes(
 	switch (pru0_mode) {
 		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
 		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
-		default: 
+		default:
 			warn("Invalid PRU0 Mode.");
 			exit(-1);
 	}
@@ -210,7 +200,7 @@ ledscape_init_with_modes(
 
 	// Watch for a done response that indicates a proper startup
 	// \todo timeout if it fails
-	fprintf(stdout, "String PRU0 with %s %d... ", pru0_program_filename);
+	fprintf(stdout, "String PRU0 with %s... ", pru0_program_filename);
 	while (!leds->ws281x_0->response);
 	printf("OK\n");
 
@@ -224,7 +214,7 @@ ledscape_init_with_modes(
 			exit(-1);
 			//pru1_program_filename = "./dmx_1.bin";
 		break;
-		default: 
+		default:
 			warn("Invalid PRU1 Mode.");
 			exit(-1);
 	}

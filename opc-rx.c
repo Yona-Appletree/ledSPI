@@ -27,7 +27,7 @@ typedef struct
 	uint8_t len_lo;
 } opc_cmd_t;
 
-typedef enum 
+typedef enum
 {
 	OPC_SYSID_FADECANDY = 1,
 
@@ -35,19 +35,20 @@ typedef enum
 	OPC_SYSID_LEDSCAPE = 2
 } opc_system_id_t;
 
-typedef enum 
+typedef enum
 {
-	OPC_LEDSCAPE_CMD_SET_CONFIG = 0
+	OPC_LEDSCAPE_CMD_SET_CONFIG = 0,
+	OPC_LEDSCAPE_CMD_GET_CONFIG = 1
 } opc_ledscape_cmd_id_t;
 
-typedef struct 
+typedef struct
 {
 	uint8_t len_hi;
 	uint8_t len_lo;
 
 	uint8_t pru0_mode;
 	uint8_t pru1_mode;
-} opc_ledscape_set_config_t;
+} opc_ledscape_config_t;
 
 
 static int
@@ -55,11 +56,11 @@ tcp_socket(
 	const int port
 )
 {
-	const int sock = socket(AF_INET, SOCK_STREAM, 0);
-	struct sockaddr_in addr = {
-		.sin_family = AF_INET,
-		.sin_port = htons(port),
-		.sin_addr.s_addr = INADDR_ANY,
+	const int sock = socket(AF_INET6, SOCK_STREAM, 0);
+	struct sockaddr_in6 addr = {
+		.sin6_family = AF_INET6,
+		.sin6_port = htons(port),
+		.sin6_addr = in6addr_any,
 	};
 
 	if (sock < 0)
@@ -71,7 +72,6 @@ tcp_socket(
 
 	return sock;
 }
-
 
 int
 main(
@@ -91,9 +91,11 @@ main(
 		case 'p':
 			port = atoi(optarg);
 			break;
+
 		case 'c':
 			led_count = atoi(optarg);
 			break;
+
 		case 'd': {
 			int width=0, height=0;
 
@@ -163,7 +165,7 @@ main(
 					break;
 				offset += rlen;
 			}
-				
+
 			if (cmd.command == 0) {
 				// Standard display data command
 				struct timeval start_tv, stop_tv, delta_tv;
@@ -217,17 +219,26 @@ main(
 					const opc_ledscape_cmd_id_t ledscape_cmd_id = buf[2];
 
 					if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_SET_CONFIG) {
-						opc_ledscape_set_config_t* config_cmd = &buf[3];
+						opc_ledscape_config_t* config_cmd = &buf[3];
 						led_count = config_cmd->len_hi << 8 | config_cmd->len_lo;
 
-						warn("Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)", led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
+						warn("Received config update request: (led_count=%d, pru0_mode=%d, pru1_mode=%d)\n", led_count, config_cmd->pru0_mode, config_cmd->pru1_mode);
 
 						// TODO: Implement configuration updating
+					} else if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+						opc_ledscape_config_t config;
+						config.len_hi = (leds->num_pixels >> 8) & 0xFF;
+						config.len_lo = leds->num_pixels & 0xFF;
+						config.pru0_mode = leds->pru0_mode;
+						config.pru1_mode = leds->pru1_mode;
+
+						warn("Responding to config request\n");
+						write(fd, &config, sizeof(config));
 					} else {
-						warn("WARN: Received command for unsupported LEDscape Command: %d", (int)ledscape_cmd_id);
+						warn("WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
 					}
 				} else {
-					warn("WARN: Received command for unsupported system-id: %d", (int)system_id);
+					warn("WARN: Received command for unsupported system-id: %d\n", (int)system_id);
 				}
 			}
 		}
