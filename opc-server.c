@@ -92,7 +92,9 @@ typedef struct {
 	int8_t g;
 	int8_t b;
 
-	int8_t lastEffectFrame;
+	int8_t last_effect_frame_r;
+	int8_t last_effect_frame_g;
+	int8_t last_effect_frame_b;
 } __attribute__((__packed__)) pixel_delta_t;
 
 static struct
@@ -384,7 +386,7 @@ void* render_thread(void* unused_data)
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
-		uint32_t maxDitherFrames = 16666 / delta_avg;
+		uint32_t maxDitherFrames = 10000 / delta_avg;
 
 		for (uint32_t strip_index=0; strip_index<LEDSCAPE_NUM_STRIPS; strip_index++) {
 			for (uint32_t led_index=0; led_index<leds_per_strip; led_index++, data_index++) {
@@ -416,15 +418,22 @@ void* render_thread(void* unused_data)
 					interpolatedB = lutInterpolate(interpolatedB, g_server_config.blueLookup);
 				}
 
-				// if (data_index == 0) {
-				// 	printf("%d\n", abs(abs(pixel_in_overflow->lastEffectFrame) - abs(ditheringFrame)));
-				// }
 
 				// Reset dithering for this pixel if it's been too long since it actually changed anything. This serves to prevent
 				// visible blinking pixels.
-				if (abs(abs(pixel_in_overflow->lastEffectFrame) - abs(ditheringFrame)) > maxDitherFrames) {
-					pixel_in_overflow->r = pixel_in_overflow->g = pixel_in_overflow->b = 0;
-					pixel_in_overflow->lastEffectFrame = ditheringFrame;
+				if (abs(abs(pixel_in_overflow->last_effect_frame_r) - abs(ditheringFrame)) > maxDitherFrames) {
+					pixel_in_overflow->r = 0;
+					pixel_in_overflow->last_effect_frame_r = ditheringFrame;
+				}
+
+				if (abs(abs(pixel_in_overflow->last_effect_frame_g) - abs(ditheringFrame)) > maxDitherFrames) {
+					pixel_in_overflow->g = 0;
+					pixel_in_overflow->last_effect_frame_g = ditheringFrame;
+				}
+
+				if (abs(abs(pixel_in_overflow->last_effect_frame_b) - abs(ditheringFrame)) > maxDitherFrames) {
+					pixel_in_overflow->b = 0;
+					pixel_in_overflow->last_effect_frame_b = ditheringFrame;
 				}
 
 				// Apply dithering overflow
@@ -444,10 +453,9 @@ void* render_thread(void* unused_data)
 				uint8_t b = pixel_out->b = min((ditheredB+0x80) >> 8, 255);
 
 				// Check for interpolation effect
-				if (r != (interpolatedR+0x80)>>8 || g != (interpolatedG+0x80)>>8 || b != (interpolatedB+0x80)>>8) {
-						pixel_in_overflow->lastEffectFrame = ditheringFrame;
-						//if (data_index == 0) printf("overflow used\n");
-				}
+				if (r != (interpolatedR+0x80)>>8) pixel_in_overflow->last_effect_frame_r = ditheringFrame;
+				if (g != (interpolatedG+0x80)>>8) pixel_in_overflow->last_effect_frame_g = ditheringFrame;
+				if (b != (interpolatedB+0x80)>>8) pixel_in_overflow->last_effect_frame_b = ditheringFrame;
 
 				// Recalculate Overflow
 				// NOTE: For some strange reason, reading the values from pixel_out causes strange memory corruption. As such
