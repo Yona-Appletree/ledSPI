@@ -27,7 +27,7 @@ typedef struct
 	uint8_t len_lo;
 } opc_cmd_t;
 
-typedef enum 
+typedef enum
 {
 	OPC_SYSID_FADECANDY = 1,
 
@@ -35,12 +35,12 @@ typedef enum
 	OPC_SYSID_LEDSCAPE = 2
 } opc_system_id_t;
 
-typedef enum 
+typedef enum
 {
 	OPC_LEDSCAPE_CMD_SET_CONFIG = 0
 } opc_ledscape_cmd_id_t;
 
-typedef struct 
+typedef struct
 {
 	uint8_t len_hi;
 	uint8_t len_lo;
@@ -163,7 +163,7 @@ main(
 					break;
 				offset += rlen;
 			}
-				
+
 			if (cmd.command == 0) {
 				// Standard display data command
 				struct timeval start_tv, stop_tv, delta_tv;

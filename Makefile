@@ -5,6 +5,7 @@
 TARGETS += rgb-test
 TARGETS += udp-rx
 TARGETS += opc-rx
+TARGETS += opc-server
 
 LEDSCAPE_OBJS = ledscape.o pru.o util.o
 LEDSCAPE_LIB := libledscape.a
@@ -35,6 +36,7 @@ CFLAGS += \
 	-Wp,-MT,$@ \
 	-I. \
 	-O2 \
+	-lm \
 	-mtune=cortex-a8 \
 	-march=armv7-a \
 
@@ -43,8 +45,8 @@ LDFLAGS += \
 LDLIBS += \
 	-lpthread \
 
-COMPILE.o = $(CROSS_COMPILE)gcc $(CFLAGS) -c -o $@ $< 
-COMPILE.a = $(CROSS_COMPILE)gcc -c -o $@ $< 
+COMPILE.o = $(CROSS_COMPILE)gcc $(CFLAGS) -c -o $@ $<
+COMPILE.a = $(CROSS_COMPILE)gcc -c -o $@ $<
 COMPILE.link = $(CROSS_COMPILE)gcc $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 
@@ -56,7 +58,7 @@ COMPILE.link = $(CROSS_COMPILE)gcc $(LDFLAGS) -o $@ $^ $(LDLIBS)
 APP_LOADER_DIR ?= ./am335x/app_loader
 APP_LOADER_LIB := $(APP_LOADER_DIR)/lib/libprussdrv.a
 CFLAGS += -I$(APP_LOADER_DIR)/include
-LDLIBS += $(APP_LOADER_LIB)
+LDLIBS += $(APP_LOADER_LIB) -lm
 
 #####
 #
@@ -97,7 +99,7 @@ clean:
 
 
 ###########
-# 
+#
 # The correct way to reserve the GPIO pins on the BBB is with the
 # capemgr and a Device Tree file.  But it doesn't work.
 #
@@ -113,9 +115,9 @@ dts: LEDscape.dts
 
 
 ###########
-# 
+#
 # PRU Libraries and PRU assembler are build from their own trees.
-# 
+#
 $(APP_LOADER_LIB):
 	$(MAKE) -C $(APP_LOADER_DIR)/interface
 

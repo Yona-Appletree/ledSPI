@@ -92,7 +92,7 @@ ledscape_frame(
 
 	return (ledscape_frame_t*)((uint8_t*) leds->pru0->ddr + leds->frame_size * frame);
 }
-	
+
 
 /** Initiate the transfer of a frame to the LED strips */
 void
@@ -101,14 +101,15 @@ ledscape_draw(
 	unsigned int frame
 )
 {
-	// Zero the responses so we can wait for them
-	leds->ws281x_0->response = leds->ws281x_1->response = 0;
 
 	leds->ws281x_0->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
 	leds->ws281x_1->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
 
 	// Wait for any current command to have been acknowledged
 	while (leds->ws281x_0->command || leds->ws281x_1->command);
+
+	// Zero the responses so we can wait for them
+	leds->ws281x_0->response = leds->ws281x_1->response = 0;
 
 	// Send the start command
 	leds->ws281x_0->command = 1;
@@ -129,7 +130,7 @@ ledscape_wait(
 		uint32_t response0 = leds->ws281x_0->response;
 		uint32_t response1 = leds->ws281x_1->response;
 
-		// printf("pru0: (%d,%d), pru1: (%d,%d)\n", 
+		// printf("pru0: (%d,%d), pru1: (%d,%d)\n",
 		// 	leds->ws281x_0->command, leds->ws281x_0->response,
 		// 	leds->ws281x_1->command, leds->ws281x_1->response
 		// );
@@ -202,7 +203,7 @@ ledscape_init_with_modes(
 	switch (pru0_mode) {
 		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
 		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
-		default: 
+		default:
 			warn("Invalid PRU0 Mode.");
 			exit(-1);
 	}
@@ -224,7 +225,7 @@ ledscape_init_with_modes(
 			exit(-1);
 			//pru1_program_filename = "./dmx_1.bin";
 		break;
-		default: 
+		default:
 			warn("Invalid PRU1 Mode.");
 			exit(-1);
 	}
