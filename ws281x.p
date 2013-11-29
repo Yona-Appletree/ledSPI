@@ -143,6 +143,8 @@
 
 #include "ws281x.hp"
 
+#define NOP       mov r0, r0
+
 /** Mappings of the GPIO devices */
 #define GPIO0 0x44E07000
 #define GPIO1 0x4804c000
@@ -162,6 +164,9 @@
 #define gpio3_zeros r5
 #define bit_num r6
 #define sleep_counter r7
+#define addr_reg r8
+#define temp_reg r9
+#define temp2_reg r27
 // r10 - r26 are used for temp storage and bitmap processing
 
 
@@ -189,14 +194,32 @@ lab:
     MOV r8, 0x22000 // control register
 lab:
 	LBBO r9, r8, 0xC, 4 // read the cycle counter
-	SUB r9, r9, sleep_counter 
+//	SUB r9, r9, sleep_counter 
 #ifdef CONFIG_WS2812
-	QBGT lab, r9, 2*(lab)/5
+	QBGT lab, r9, 2*(ns)/5
 #else
-	QBGT lab, r9, (lab)/5
+	QBGT lab, r9, (ns)/5
 #endif
 .endm
 
+/** Reset the cycle counter */
+.macro RESET_COUNTER
+		// Disable the counter and clear it, then re-enable it
+		MOV addr_reg, 0x22000 // control register
+		LBBO r9, addr_reg, 0, 4
+		CLR r9, r9, 3 // disable counter bit
+		SBBO r9, addr_reg, 0, 4 // write it back
+
+		MOV temp2_reg, 0
+		SBBO temp2_reg, addr_reg, 0xC, 4 // clear the timer
+
+		SET r9, r9, 3 // enable counter bit
+		SBBO r9, addr_reg, 0, 4 // write it back
+
+		// Read the current counter value
+		// Should be zero.
+		LBBO sleep_counter, addr_reg, 0xC, 4
+.endm
 
 START:
     // Enable OCP master port
@@ -225,6 +248,38 @@ START:
     MOV r2, #0x1
     SBCO r2, CONST_PRUDRAM, 12, 4
 
+
+	MOV r20, 0xFFFFFFFF
+
+	/*
+// Enable to generate a reference signal of 010101... to GPIO0
+_REFERENCE_SIGNAL_LOOP:
+	// Send 0
+	MOV r10, GPIO0 | GPIO_SETDATAOUT
+	SBBO r20, r10, 0, 4
+	SLEEPNS 250, 3, after_set0_wait_loop
+
+	NOP
+
+	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
+	SBBO r20, r10, 0, 4
+	SLEEPNS 1000, 3, after_clear0_wait_loop
+
+	NOP
+
+	// Send 1
+	MOV r10, GPIO0 | GPIO_SETDATAOUT
+	SBBO r20, r10, 0, 4
+	SLEEPNS 1000, 3, after_set1_wait_loop
+
+	NOP
+
+	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
+	SBBO r20, r10, 0, 4
+	SLEEPNS 250, 3, after_clear1_wait_loop
+
+	QBA _REFERENCE_SIGNAL_LOOP */
+
     // Wait for the start condition from the main program to indicate
     // that we have a rendered frame ready to clock out.  This also
     // handles the exit case if an invalid value is written to the start
@@ -237,6 +292,9 @@ _LOOP:
 
     // Wait for a non-zero command
     QBEQ _LOOP, r2, #0
+
+    // Reset the sleep timer
+    RESET_COUNTER
 
     // Zero out the start command so that they know we have received it
     // This allows maximum speed frame drawing since they know that they
@@ -253,40 +311,24 @@ WORD_LOOP:
 
 	BIT_LOOP:
 		SUB bit_num, bit_num, 1
-		// The idle period is 650 ns, but this is where
-		// we do all of our work to read the RGB data and
-		// repack it into bit slices.  Read the current counter
-		// and then wait until 650 ns have passed once we complete
-		// our work.
-		// Disable the counter and clear it, then re-enable it
-		MOV r8, 0x22000 // control register
-		LBBO r9, r8, 0, 4
-		CLR r9, r9, 3 // disable counter bit
-		SBBO r9, r8, 0, 4 // write it back
-
-		MOV r10, 0
-		SBBO r10, r8, 0xC, 4 // clear the timer
-
-		SET r9, r9, 3 // enable counter bit
-		SBBO r9, r8, 0, 4 // write it back
-
-		// Read the current counter value
-		// Should be zero.
-		LBBO sleep_counter, r8, 0xC, 4
-
-/** Macro to generate the mask of which bits are zero.
- * For each of these registers, set the
- * corresponding bit in the gpio0_zeros register if
- * the current bit is set in the strided register.
- */
-#define TEST_BIT(regN,gpioN,bitN) \
-	QBBS gpioN##_##regN##_skip, regN, bit_num; \
-	SET gpioN##_zeros, gpioN##_zeros, gpioN##_##bitN ; \
-	gpioN##_##regN##_skip: ; \
+		// This is where all the work to load the next round of bits happen
+		// but there really isn't time for it, given that we only have 375ns
+		// (75 instructions) to do it in.
+		
+		/** Macro to generate the mask of which bits are zero.
+		 * For each of these registers, set the
+		 * corresponding bit in the gpio0_zeros register if
+		 * the current bit is set in the strided register.
+		 */
+		#define TEST_BIT(regN,gpioN,bitN) \
+			QBBS gpioN##_##regN##_skip, regN, bit_num; \
+			SET gpioN##_zeros, gpioN##_zeros, gpioN##_##bitN ; \
+			gpioN##_##regN##_skip: ; \
 
 		// Load 16 registers of data, starting at r10
 		LBBO r10, r0, 0, 16*4
 		MOV gpio0_zeros, 0
+
 		TEST_BIT(r10, gpio0, bit0)
 		TEST_BIT(r11, gpio0, bit1)
 		TEST_BIT(r12, gpio0, bit2)
@@ -346,11 +388,11 @@ WORD_LOOP:
 		MOV r22, GPIO2_LED_MASK
 		MOV r23, GPIO3_LED_MASK
 
-		// Wait for 650 ns to have passed
-		// \todo: Move some of the other work to the other
-		// cycles.  I think this might have already been exhausted
-		// with the addition of GPIO3 banked LEDs
-		WAITNS 650, wait_start_time
+		// Wait for the last frame to be completely finished (each frame should be 1250ns)
+		//WAITNS 1250, wait_start_time
+
+		// Reset the timer to count this frame
+		//RESET_COUNTER
 
 		// Send all the start bits
 		SBBO r20, r10, 0, 4
@@ -364,8 +406,9 @@ WORD_LOOP:
 		MOV r12, GPIO2 | GPIO_CLEARDATAOUT
 		MOV r13, GPIO3 | GPIO_CLEARDATAOUT
 
-		// wait for the length of the zero bits (250 ns)
-		WAITNS 650+250, wait_zero_time
+		// wait for the length of the zero bits (250ns)
+		// in reality, no wait is necessary. The width of the pulse is already about 250ns
+		//WAITNS 250, wait_zero_time
 		//SLEEPNS 250, 1, wait_zero_time
 
 		// turn off all the zero bits
@@ -374,9 +417,9 @@ WORD_LOOP:
 		SBBO gpio2_zeros, r12, 0, 4
 		SBBO gpio3_zeros, r13, 0, 4
 
-		// Wait until the length of the one bits
-		WAITNS 650+600, wait_one_time
-		//SLEEPNS 350, 1, wait_one_time
+		// Wait until the length of the one bits (875ns)
+		//WAITNS 875, wait_one_time
+		SLEEPNS 875, 1, wait_one_time
 
 		// Turn all the bits off
 		SBBO r20, r10, 0, 4

@@ -1,5 +1,5 @@
 [Unit]
-Description=BeagleBone LED matrix driver
+Description=LEDScape UDP Receiver
 
 [Service]
 WorkingDirectory=/home/root/LEDscape/

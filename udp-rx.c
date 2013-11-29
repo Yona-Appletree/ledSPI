@@ -49,16 +49,6 @@ main(
 		if (rc < 0)
 			die("recv failed: %s\n", strerror(errno));
 
-		if (buf[0] == '2')
-		{
-			// image type
-			printf("image type: %.*s\n",
-				(int) rc - 1,
-				&buf[1]
-			);
-			continue;
-		}
-
 		ledscape_frame_t * const frame
 			= ledscape_frame(leds, frame_num);
 
@@ -66,9 +56,9 @@ main(
 		{
 			for(unsigned strip = 0 ; strip < 32 ; strip++)
 			{
-				const uint8_t r = buf[x*num_strips+1];
-				const uint8_t g = buf[x*num_strips+2];
-				const uint8_t b = buf[x*num_strips+3];
+				const uint8_t r = buf[strip*num_pixels*3 + x*3 + 0];
+				const uint8_t g = buf[strip*num_pixels*3 + x*3 + 1];
+				const uint8_t b = buf[strip*num_pixels*3 + x*3 + 2];
 				ledscape_set_color(frame, strip, x, r, g, b);
 			}
 		}
