@@ -72,8 +72,10 @@ typedef struct
 
 struct ledscape
 {
-	ws281x_command_t * ws281x;
-	pru_t * pru;
+	ws281x_command_t * ws281x_0;
+	ws281x_command_t * ws281x_1;
+	pru_t * pru0;
+	pru_t * pru1;
 	unsigned num_pixels;
 	size_t frame_size;
 };
@@ -89,7 +91,7 @@ ledscape_frame(
 	if (frame >= 2)
 		return NULL;
 
-	return (ledscape_frame_t*)((uint8_t*) leds->pru->ddr + leds->frame_size * frame);
+	return (ledscape_frame_t*)((uint8_t*) leds->pru0->ddr + leds->frame_size * frame);
 }
 	
 
@@ -100,15 +102,15 @@ ledscape_draw(
 	unsigned int frame
 )
 {
-	leds->ws281x->pixels_dma = leds->pru->ddr_addr + leds->frame_size * frame;
-#if 1
+	leds->ws281x_0->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
+	leds->ws281x_1->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
+
 	// Wait for any current command to have been acknowledged
-	while (leds->ws281x->command)
-		;
+	while (leds->ws281x_0->command || leds->ws281x_1->command);
 
 	// Send the start command
-	leds->ws281x->command = 1;
-#endif
+	leds->ws281x_0->command = 1;
+	leds->ws281x_1->command = 1;
 }
 
 
@@ -122,11 +124,14 @@ ledscape_wait(
 {
 	while (1)
 	{
-		uint32_t response = leds->ws281x->response;
-		if (!response)
-			continue;
-		leds->ws281x->response = 0;
-		return response;
+		uint32_t response0 = leds->ws281x_0->response;
+		uint32_t response1 = leds->ws281x_1->response;
+
+		if (response0 && response1) {
+			leds->ws281x_0->response = leds->ws281x_1->response = 0;
+			// TODO: How to handle both return values?
+			return response0;
+		}
 	}
 }
 
@@ -136,25 +141,29 @@ ledscape_init(
 	unsigned num_pixels
 )
 {
-	pru_t * const pru = pru_init(0);
+	pru_t * const pru0 = pru_init(0);
+	pru_t * const pru1 = pru_init(1);
+
 	const size_t frame_size = num_pixels * LEDSCAPE_NUM_STRIPS * 4;
 
-	if (2 *frame_size > pru->ddr_size)
+	if (2 *frame_size > pru0->ddr_size)
 		die("Pixel data needs at least 2 * %zu, only %zu in DDR\n",
 			frame_size,
-			pru->ddr_size
+			pru0->ddr_size
 		);
 
 	ledscape_t * const leds = calloc(1, sizeof(*leds));
 
 	*leds = (ledscape_t) {
-		.pru		= pru,
+		.pru0		= pru0,
+		.pru1		= pru1,
 		.num_pixels	= num_pixels,
 		.frame_size	= frame_size,
-		.ws281x		= pru->data_ram,
+		.ws281x_0	= pru0->data_ram,
+		.ws281x_1	= pru1->data_ram,
 	};
 
-	*(leds->ws281x) = (ws281x_command_t) {
+	*(leds->ws281x_0) = *(leds->ws281x_1) = (ws281x_command_t) {
 		.pixels_dma	= 0, // will be set in draw routine
 		.command	= 0,
 		.response	= 0,
@@ -171,18 +180,24 @@ ledscape_init(
 	for (unsigned i = 0 ; i < ARRAY_COUNT(gpios3) ; i++)
 		pru_gpio(3, gpios3[i], 1, 0);
 
-	// Initiate the PRU program
-	if (0)
-		pru_exec(pru, "./matrix.bin");
-	else
-		pru_exec(pru, "./ws281x.bin");
+	// Initiate the PRU0 program
+	pru_exec(pru0, "./ws281x_0.bin");
 
 	// Watch for a done response that indicates a proper startup
 	// \todo timeout if it fails
-	printf("waiting for response\n");
-	while (!leds->ws281x->response)
-		;
-	printf("got response\n");
+	fprintf(stdout, "waiting for response from pru0... ");
+	while (!leds->ws281x_0->response);
+	printf("OK\n");
+
+
+	// Initiate the PRU1 program
+	pru_exec(pru1, "./ws281x_1.bin");
+
+	// Watch for a done response that indicates a proper startup
+	// \todo timeout if it fails
+	fprintf(stdout, "waiting for response from pru1... ");
+	while (!leds->ws281x_1->response);
+	printf("OK\n");
 
 	return leds;
 }
@@ -194,8 +209,10 @@ ledscape_close(
 )
 {
 	// Signal a halt command
-	leds->ws281x->command = 0xFF;
-	pru_close(leds->pru);
+	leds->ws281x_0->command = 0xFF;
+	leds->ws281x_1->command = 0xFF;
+	pru_close(leds->pru0);
+	pru_close(leds->pru1);
 }
 
 

@@ -12,7 +12,7 @@ TARGETS += udp-rx
 LEDSCAPE_OBJS = ledscape.o pru.o bitslice.o util.o
 LEDSCAPE_LIB := libledscape.a
 
-all: $(TARGETS) ws281x.bin matrix.bin
+all: $(TARGETS) ws281x_0.bin ws281x_1.bin matrix.bin
 
 
 ifeq ($(shell uname -m),armv7l)
