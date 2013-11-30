@@ -13,6 +13,69 @@ there are +5V signals involved.
 Overview
 ========
 
+This is a modified version of the LEDscape library designed to control
+up to 32 chains of WS2811-based LED modules from a Beagle Bone Black. The 
+timing has been updated and verified to work with both WS2812 and WS2812b 
+chips. This version of the library uses both PRUs on the Beagle Bone Black
+and has approximately 2x the framerate of the original library.
+
+Installation and Usage
+========
+
+To use LEDscape, download it to your BeagleBone Black. 
+
+First, make sure that LEDscape compiles:
+
+	make
+
+Before LEDscape will function, you will need to replace the device tree
+file and reboot.
+
+	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
+	cp am335x-boneblack.dtb /boot/
+	reboot
+
+You can now test LEDscape, run the following to display a map of how
+the LEDscape strip ordering coreesponds to the GPIO pins on the BBB:
+
+	node pinmap.js
+
+Connect a WS2811-based LED chain to the Beagle Bone. The strip must
+be running at the same voltage as the data signal. If you are using
+an external 5v supply for the LEDs, you'll need to use a level shifter
+or other technique to bring the BBB's 3.3v signals up to 5v.
+
+Once everything is connected, run the `rgb-test` program:
+
+	./rgb-test
+
+The LEDs should now be fading prettily. If not, go back and make
+sure everything is setup correctly.
+
+At this point, you will probably want to install the ledscape service
+which will run the UDP->LEDscape bridge on port 9999. You can then
+send data to LEDscape from other programs or computers.
+
+To install the service:
+
+	systemctl enable /path/to/LEDscape/ledscape.service
+
+To start or stop the service:
+
+	systemctl start ledscape
+
+Note that you must specify an absolute path. Relative paths will not
+work with systemctl to enable services.
+
+You can now send data to UDP port 9999. The format is:
+
+	Strip 0     Strip 1   Strip 2
+	RGBRGB...RGBRGBRGB....RGB
+
+
+Implementation Notes
+========
+
 The WS281x LED chips are built like shift registers and make for very
 easy LED strip construction.  The signals are duty-cycle modulated,
 with a 0 measuring 250 ns long and a 1 being 600 ns long, and 1250 ns
@@ -42,8 +105,7 @@ on the length of th elongest strip.
 API
 ===
 
-<ledscape.h> defines the API.  The sample rgb-test program pulses
-the first three LEDs in red, green and blue.  The key components are:
+<ledscape.h> defines the API. The key components are:
 
 	ledscape_t * ledscape_init(unsigned num_pixels)
 	ledscape_frame_t * ledscape_frame(ledscape_t*, unsigned frame_num);
@@ -112,7 +174,7 @@ dma address or number of pixels.
 		volatile unsigned response;
 	} __attribute__((__packed__)) ws281x_command_t;
 
-LED Strips
+Datasheets
 ==========
 
 * http://www.adafruit.com/products/1138
