@@ -12,81 +12,82 @@
 #include "ledscape.h"
 
 static void ledscape_fill_color(
-	ledscape_frame_t * const frame,
-	const unsigned num_pixels,
-	const uint8_t r,
-	const uint8_t g,
-	const uint8_t b
+  ledscape_frame_t * const frame,
+  const unsigned num_pixels,
+  const uint8_t r,
+  const uint8_t g,
+  const uint8_t b
 )
 {
-	for (unsigned i = 0 ; i < num_pixels ; i++)
-		for (unsigned strip = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
-			ledscape_set_color(frame, strip, i, r, g, b);
+  for (unsigned i = 0 ; i < num_pixels ; i++)
+    for (unsigned strip = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
+      ledscape_set_color(frame, strip, i, r, g, b);
 }
 
 int main (void)
 {
-	const int num_pixels = 256;
-	ledscape_t * const leds = ledscape_init(num_pixels);
-	time_t last_time = time(NULL);
-	unsigned last_i = 0;
+  const int num_pixels = 256;
+  ledscape_t * const leds = ledscape_init(num_pixels);
+  time_t last_time = time(NULL);
+  unsigned last_i = 0;
 
-	uint8_t rgb[3];
+  uint8_t rgb[3];
 
-	unsigned i = 0;
-	while (1)
-	{
-		// Alternate frame buffers on each draw command
-		const unsigned frame_num = i++ % 2;
-		ledscape_frame_t * const frame
-			= ledscape_frame(leds, frame_num);
+  unsigned i = 0;
+  while (1)
+  {
+    // Alternate frame buffers on each draw command
+    const unsigned frame_num = i++ % 2;
+    ledscape_frame_t * const frame
+      = ledscape_frame(leds, frame_num);
 
-		uint8_t val = i >> 1;
-		uint16_t r = ((i >>  0) & 0xFF);
-		uint16_t g = ((i >>  8) & 0xFF);
-		uint16_t b = ((i >> 16) & 0xFF);
+    uint8_t val = i >> 1;
+    uint16_t r = ((i >>  0) & 0xFF);
+    uint16_t g = ((i >>  8) & 0xFF);
+    uint16_t b = ((i >> 16) & 0xFF);
 
-		for (unsigned strip = 0 ; strip < 32 ; strip++)
-		{
-			for (unsigned p = 0 ; p < num_pixels; p++)
-			{
-				HSBtoRGB(
-				  (int) (((float)p / num_pixels)*360) + (i % 3600), 128, 128,
-					rgb
-				);
+    for (unsigned strip = 0 ; strip < 32 ; strip++)
+    {
+      for (unsigned p = 0 ; p < num_pixels; p++)
+      {
+        HSBtoRGB(
+          ((i/10 + (p*360)/num_pixels) % 360), 
+          (i/5 + p)%100 < 10 ? 255: 100, 
+          (i/5 + p)%100 < 10 ? 200: 40,
+          rgb
+        );
 
-				ledscape_set_color(
-					frame,
-					strip,
-					p,
+        ledscape_set_color(
+          frame,
+          strip,
+          p,
 
-					rgb[0],
-					rgb[1],
-					rgb[2]
-				);
-				//ledscape_set_color(frame, strip, 3*p+1, 0, p+val + 80, 0);
-				//ledscape_set_color(frame, strip, 3*p+2, 0, 0, p+val + 160);
-			}
-		}
+          rgb[0],
+          rgb[1],
+          rgb[2]
+        );
+        //ledscape_set_color(frame, strip, 3*p+1, 0, p+val + 80, 0);
+        //ledscape_set_color(frame, strip, 3*p+2, 0, 0, p+val + 160);
+      }
+    }
 
+    // wait for the previous frame to finish;
+    const uint32_t response = ledscape_wait(leds);
+    time_t now = time(NULL);
+    if (now != last_time)
+    {
+      printf("%d fps. starting %d previous %"PRIx32"\n",
+        i - last_i, i, response);
+      last_i = i;
+      last_time = now;
+    }
 
-		// wait for the previous frame to finish;
-		const uint32_t response = ledscape_wait(leds);
-		time_t now = time(NULL);
-		if (now != last_time)
-		{
-			printf("%d fps. starting %d previous %"PRIx32"\n",
-				i - last_i, i, response);
-			last_i = i;
-			last_time = now;
-		}
+    ledscape_draw(leds, frame_num);
+  }
 
-		ledscape_draw(leds, frame_num);
-	}
+  ledscape_close(leds);
 
-	ledscape_close(leds);
-
-	return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }
 
 
@@ -125,7 +126,7 @@ void HSBtoRGB(int hue, int sat, int val, uint8_t out[]) {
   int base;
 
   if (sat == 0) { // Acromatic color (gray). Hue doesn't mind.
-  	r = g = b = val;
+    r = g = b = val;
   } else  { 
     base = ((255 - sat) * val)>>8;
 

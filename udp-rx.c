@@ -41,13 +41,15 @@ main(
 
 	unsigned frame_num = 0;
 
-	uint8_t buf[65536];
+	uint8_t buf[num_pixels * num_strips * 4];
 
 	while (1)
 	{
 		const ssize_t rc = recv(sock, buf, sizeof(buf), 0);
-		if (rc < 0)
-			die("recv failed: %s\n", strerror(errno));
+		if (rc < 0) {
+			printf("recv failed: %s\n", strerror(errno));
+			continue;
+		}
 
 		ledscape_frame_t * const frame
 			= ledscape_frame(leds, frame_num);
