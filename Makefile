@@ -2,17 +2,14 @@
 #
 # The top level targets link in the two .o files for now.
 #
-TARGETS += teensy-udp-rx
 TARGETS += rgb-test
-TARGETS += matrix-test
 TARGETS += fire
-TARGETS += matrix-udp-rx
 TARGETS += udp-rx
 
-LEDSCAPE_OBJS = ledscape.o pru.o bitslice.o util.o
+LEDSCAPE_OBJS = ledscape.o pru.o util.o
 LEDSCAPE_LIB := libledscape.a
 
-all: $(TARGETS) ws281x_0.bin ws281x_1.bin matrix.bin
+all: $(TARGETS) ws281x_0.bin ws281x_1.bin
 
 
 ifeq ($(shell uname -m),armv7l)
