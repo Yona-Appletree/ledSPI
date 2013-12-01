@@ -17,7 +17,6 @@
 #include <string.h>
 #include <pthread.h>
 #include "util.h"
-#include "bitslice.h"
 #include "ledscape.h"
 
 typedef struct
@@ -73,7 +72,7 @@ main(
 
 	fprintf(stderr, "%u x %u, TCP port %u\n", width, height, port);
 
-	ledscape_t * const leds = ledscape_init(width, height);
+	ledscape_t * const leds = ledscape_init(width * height);
 
 	const unsigned report_interval = 10;
 	unsigned last_report = 0;

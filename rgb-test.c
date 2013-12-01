@@ -46,7 +46,7 @@ int main (void)
     uint16_t g = ((i >>  8) & 0xFF);
     uint16_t b = ((i >> 16) & 0xFF);
 
-    for (unsigned strip = 0 ; strip < 32 ; strip++)
+    for (unsigned strip = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
     {
       for (unsigned p = 0 ; p < num_pixels; p++)
       {
@@ -74,10 +74,10 @@ int main (void)
     // wait for the previous frame to finish;
     const uint32_t response = ledscape_wait(leds);
     time_t now = time(NULL);
+
     if (now != last_time)
     {
-      printf("%d fps. starting %d previous %"PRIx32"\n",
-        i - last_i, i, response);
+      printf("%d fps. starting %d previous %"PRIx32"\n", i - last_i, i, response);
       last_i = i;
       last_time = now;
     }

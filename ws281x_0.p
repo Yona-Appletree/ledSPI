@@ -45,98 +45,6 @@
  //* 
  //*/
 
-// Pins available in GPIO0
-#define gpio0_bit0 2
-#define gpio0_bit1 3
-#define gpio0_bit2 4
-#define gpio0_bit3 5
-#define gpio0_bit4 7
-#define gpio0_bit5 12
-#define gpio0_bit6 13
-#define gpio0_bit7 14
-#define gpio0_bit8 15
-#define gpio0_bit9 20
-#define gpio0_bit10 22
-#define gpio0_bit11 23
-#define gpio0_bit12 26
-#define gpio0_bit13 27
-#define gpio0_bit14 30
-#define gpio0_bit15 31
-
-// Pins available in GPIO1
-#define gpio1_bit0 12
-#define gpio1_bit1 13
-#define gpio1_bit2 14
-#define gpio1_bit3 15
-#define gpio1_bit4 16
-#define gpio1_bit5 17
-#define gpio1_bit6 18
-#define gpio1_bit7 19
-#define gpio1_bit8 28
-#define gpio1_bit9 29
-
-// Pins in GPIO2
-#define gpio2_bit0 1
-#define gpio2_bit1 2
-#define gpio2_bit2 3
-#define gpio2_bit3 4
-#define gpio2_bit4 5
-
-// And the paltry pins in GPIO3 to give us 32
-#define gpio3_bit0 16
-#define gpio3_bit1 19
-
-/** Generate a bitmask of which pins in GPIO0-3 are used.
- * 
- * This is used to bring all the pins up for the start of
- * the bit, and then back down at the end of the 1 bits.
- * 
- * \todo wtf "parameter too long": only 128 chars allowed?
- */
-#define GPIO0_LED_MASK (0\
-|(1<<gpio0_bit0)\
-|(1<<gpio0_bit1)\
-|(1<<gpio0_bit2)\
-|(1<<gpio0_bit3)\
-|(1<<gpio0_bit4)\
-|(1<<gpio0_bit5)\
-|(1<<gpio0_bit6)\
-|(1<<gpio0_bit7)\
-|(1<<gpio0_bit8)\
-|(1<<gpio0_bit9)\
-|(1<<gpio0_bit10)\
-|(1<<gpio0_bit11)\
-|(1<<gpio0_bit12)\
-|(1<<gpio0_bit13)\
-|(1<<gpio0_bit14)\
-|(1<<gpio0_bit15)\
-)
-
-#define GPIO1_LED_MASK (0\
-|(1<<gpio1_bit0)\
-|(1<<gpio1_bit1)\
-|(1<<gpio1_bit2)\
-|(1<<gpio1_bit3)\
-|(1<<gpio1_bit4)\
-|(1<<gpio1_bit5)\
-|(1<<gpio1_bit6)\
-|(1<<gpio1_bit7)\
-|(1<<gpio1_bit8)\
-|(1<<gpio1_bit9)\
-)
-
-#define GPIO2_LED_MASK (0\
-|(1<<gpio2_bit0)\
-|(1<<gpio2_bit1)\
-|(1<<gpio2_bit2)\
-|(1<<gpio2_bit3)\
-|(1<<gpio2_bit4)\
-)
-
-#define GPIO3_LED_MASK (0\
-|(1<<gpio3_bit0)\
-|(1<<gpio3_bit1)\
-)
 
 .origin 0
 .entrypoint START
@@ -145,15 +53,6 @@
 
 #define NOP       mov r0, r0
 
-/** Mappings of the GPIO devices */
-#define GPIO0 0x44E07000
-#define GPIO1 0x4804c000
-#define GPIO2 0x481AC000
-#define GPIO3 0x481AE000
-
-/** Offsets for the clear and set registers in the devices */
-#define GPIO_CLEARDATAOUT 0x190
-#define GPIO_SETDATAOUT 0x194
 
 /** Register map */
 #define data_addr r0
@@ -311,10 +210,6 @@ WORD_LOOP:
 
 	BIT_LOOP:
 		SUB bit_num, bit_num, 1
-		// This is where all the work to load the next round of bits happen
-		// but there really isn't time for it, given that we only have 375ns
-		// (75 instructions) to do it in.
-		
 		/** Macro to generate the mask of which bits are zero.
 		 * For each of these registers, set the
 		 * corresponding bit in the gpio0_zeros register if
@@ -346,40 +241,61 @@ WORD_LOOP:
 		TEST_BIT(r24, gpio0, bit14)
 		TEST_BIT(r25, gpio0, bit15)
 
-		// All data read. Registers 10-25 are now available for general use
+		// Load 8 more registers of data
+		LBBO r10, r0, 16*4, 8*4
+		// Data loaded
+
 
 		// Load the address(es) of the GPIO devices
 		MOV r20, GPIO0_LED_MASK
+		MOV r21, GPIO1_LED_MASK
 
-		// Turn off all the 1s from the previous cycle of the loop
-		MOV r10, GPIO0 | GPIO_CLEARDATAOUT
-		WAITNS 1000, wait_one_time
-		SBBO r20, r10, 0, 4
+		// Clear lines from last bit
+		MOV r22, GPIO0 | GPIO_CLEARDATAOUT
+		MOV r23, GPIO1 | GPIO_CLEARDATAOUT
 
-		MOV r10, GPIO0 | GPIO_SETDATAOUT
+		WAITNS 900, wait_one_time
+		SBBO r20, r22, 0, 4
+		SBBO r21, r23, 0, 4
+
+		MOV r22, GPIO0 | GPIO_SETDATAOUT
+		MOV r23, GPIO1 | GPIO_SETDATAOUT
 
 		// Wait until the end of the frame (including the time it takes to reset the counter)
-		WAITNS 1250 - (9*5), wait_frame_spacing_time
+		WAITNS 1100, wait_frame_spacing_time
 		RESET_COUNTER
 
 		// Send all the start bits
-		SBBO r20, r10, 0, 4
+		SBBO r20, r22, 0, 4
+		SBBO r21, r23, 0, 4
 
 		// Reconfigure r10-13 for clearing the bits
-		MOV r10, GPIO0 | GPIO_CLEARDATAOUT
+		MOV r22, GPIO0 | GPIO_CLEARDATAOUT
+		MOV r23, GPIO1 | GPIO_CLEARDATAOUT
 
-		// wait for the length of the zero bits (250ns)
+		// Test some more bits to pass the time
+		MOV gpio1_zeros, 0
+		TEST_BIT(r10, gpio1, bit0)
+		TEST_BIT(r11, gpio1, bit1)
+		TEST_BIT(r12, gpio1, bit2)
+		TEST_BIT(r13, gpio1, bit3)
+		TEST_BIT(r14, gpio1, bit4)
+		TEST_BIT(r15, gpio1, bit5)
+		TEST_BIT(r16, gpio1, bit6)
+		TEST_BIT(r17, gpio1, bit7)
+
 		WAITNS 240, wait_zero_time
 
 		// turn off all the zero bits
-		SBBO gpio0_zeros, r10, 0, 4
+		SBBO gpio0_zeros, r22, 0, 4
+		SBBO gpio1_zeros, r23, 0, 4
 
 		// One bits get turned off in the next round of the loop
 		QBNE BIT_LOOP, bit_num, 0
 
-	// The 32 RGB streams have been clocked out
+	// The RGB streams have been clocked out
 	// Move to the next pixel on each row
-	ADD data_addr, data_addr, 32 * 4
+	ADD data_addr, data_addr, 48 * 4
 	SUB data_len, data_len, 1
 	QBNE WORD_LOOP, data_len, #0
 
@@ -388,6 +304,10 @@ WORD_LOOP:
 	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
 	MOV r20, GPIO0_LED_MASK
 	SBBO r20, r10, 0, 4
+
+	MOV r11, GPIO1 | GPIO_CLEARDATAOUT
+	MOV r21, GPIO1_LED_MASK
+	SBBO r21, r11, 0, 4
 
     // Delay at least 50 usec; this is the required reset
     // time for the LED strip to update with the new pixels.

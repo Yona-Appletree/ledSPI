@@ -22,26 +22,25 @@
  * If these are changed, be sure to check the mappings in
  * ws281x.p!
  *
- * The RGB matrix uses a subset of these pins, although with
- * the HDMI disabled it might use quite a few more for the four
- * output version.
+ * See https://github.com/ehayon/BeagleBone-GPIO/blob/master/src/am335x.h
+ * for a complete list of pins.
  *
- * \todo: Find a way to unify this with the defines in the .p file
+ * TODO: Find a way to unify this with the defines in the .p file
  */
 static const uint8_t gpios0[] = {
-	2, 3, 4, 5, 7, 12, 13, 14, 15, 20, 22, 23, 26, 27, 30, 31,
+	2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 20, 22, 23, 26, 27, 30, 31
 };
 
 static const uint8_t gpios1[] = {
-	12, 13, 14, 15, 16, 17, 18, 19, 28, 29,
+	12, 13, 14, 15, 16, 17, 18, 19, 28, 29
 };
 
 static const uint8_t gpios2[] = {
-	1, 2, 3, 4, 5,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22, 23, 24, 25,
 };
 
 static const uint8_t gpios3[] = {
-	16, 19,
+	14, 15, 16, 17, 19, 21
 };
 
 #define ARRAY_COUNT(a) ((sizeof(a) / sizeof(*a)))
@@ -126,6 +125,11 @@ ledscape_wait(
 	{
 		uint32_t response0 = leds->ws281x_0->response;
 		uint32_t response1 = leds->ws281x_1->response;
+
+		// printf("pru0: (%d,%d), pru1: (%d,%d)\n", 
+		// 	leds->ws281x_0->command, leds->ws281x_0->response,
+		// 	leds->ws281x_1->command, leds->ws281x_1->response
+		// );
 
 		if (response0 && response1) {
 			leds->ws281x_0->response = leds->ws281x_1->response = 0;

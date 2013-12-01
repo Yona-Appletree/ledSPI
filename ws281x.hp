@@ -113,6 +113,114 @@
 // ***************************************
 
 
+// Pins in GPIO0
+#define gpio0_bit0 2
+#define gpio0_bit1 3
+#define gpio0_bit2 4
+#define gpio0_bit3 5
+#define gpio0_bit4 7
+#define gpio0_bit5 8
+#define gpio0_bit6 9
+#define gpio0_bit7 10
+#define gpio0_bit8 11
+#define gpio0_bit9 14
+#define gpio0_bit10 20
+#define gpio0_bit11 22
+#define gpio0_bit12 23
+#define gpio0_bit13 26
+#define gpio0_bit14 27
+#define gpio0_bit15 30
+#define gpio0_bit16 31
+
+// Pins in GPIO1
+#define gpio1_bit0 12
+#define gpio1_bit1 13
+#define gpio1_bit2 14
+#define gpio1_bit3 15
+#define gpio1_bit4 16
+#define gpio1_bit5 17
+#define gpio1_bit6 18
+#define gpio1_bit7 19
+#define gpio1_bit8 28
+#define gpio1_bit9 29
+
+// Pins in GPIO2
+#define gpio2_bit0 1
+#define gpio2_bit1 2
+#define gpio2_bit2 3
+#define gpio2_bit3 4
+#define gpio2_bit4 5
+#define gpio2_bit5 6
+#define gpio2_bit6 7
+#define gpio2_bit7 8
+#define gpio2_bit8 9
+#define gpio2_bit9 10
+#define gpio2_bit10 11
+#define gpio2_bit11 12
+#define gpio2_bit12 13
+#define gpio2_bit13 14
+#define gpio2_bit14 15
+#define gpio2_bit15 16
+
+#define gpio2_bit16 17
+#define gpio2_bit17 22
+#define gpio2_bit18 23
+#define gpio2_bit19 24
+#define gpio2_bit20 25
+
+// Pins in GPIO3
+#define gpio3_bit0 14
+#define gpio3_bit1 15
+#define gpio3_bit2 16
+#define gpio3_bit3 17
+#define gpio3_bit4 19
+#define gpio3_bit5 21
+
+/** Generate a bitmask of which pins in GPIO0-3 are used.
+ * 
+ * This is used to bring all the pins up for the start of
+ * the bit, and then back down at the end of the 1 bits.
+ * 
+ * \todo wtf "parameter too long": only 128 chars allowed?
+ */
+#define GPIO0_LED_MASK 0xCCD04FBC
+
+#define GPIO1_LED_MASK (0\
+|(1<<gpio1_bit0)\
+|(1<<gpio1_bit1)\
+|(1<<gpio1_bit2)\
+|(1<<gpio1_bit3)\
+|(1<<gpio1_bit4)\
+|(1<<gpio1_bit5)\
+|(1<<gpio1_bit6)\
+|(1<<gpio1_bit7)\
+|(1<<gpio1_bit8)\
+|(1<<gpio1_bit9)\
+)
+
+#define GPIO2_LED_MASK 0x3c3fffe
+
+#define GPIO3_LED_MASK (0\
+|(1<<gpio3_bit0)\
+|(1<<gpio3_bit1)\
+|(1<<gpio3_bit2)\
+|(1<<gpio3_bit3)\
+|(1<<gpio3_bit4)\
+|(1<<gpio3_bit5)\
+)
+
+/** Mappings of the GPIO devices */
+#define GPIO0 0x44E07000
+#define GPIO1 0x4804c000
+#define GPIO2 0x481AC000
+#define GPIO3 0x481AE000
+
+/** Offsets for the clear and set registers in the devices */
+#define GPIO_CLEARDATAOUT 0x190
+#define GPIO_SETDATAOUT 0x194
+
+#define NOP       mov r0, r0
+
 // ***************************************
 // *     Global Register Assignments     *
 // ***************************************
