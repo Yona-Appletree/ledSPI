@@ -12,3 +12,6 @@ am335x/pasm/pasm
 *~
 *~
 a.out
+fade-test
+fire
+udp-rx

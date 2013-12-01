@@ -3,6 +3,7 @@
 # The top level targets link in the two .o files for now.
 #
 TARGETS += rgb-test
+TARGETS += fade-test
 TARGETS += fire
 TARGETS += udp-rx
 TARGETS += opc-rx
@@ -94,7 +95,7 @@ clean:
 		*~ \
 		$(INCDIR_APP_LOADER)/*~ \
 		$(TARGETS) \
-		ws281x.bin \
+		*.bin \
 
 
 ###########
