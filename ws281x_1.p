@@ -50,6 +50,77 @@
 
 #include "ws281x.hp"
 
+
+//===============================
+// GPIO Pin Mapping
+
+// Pins in GPIO2
+#define gpio2_bit0 1
+#define gpio2_bit1 2
+#define gpio2_bit2 3
+#define gpio2_bit3 4
+#define gpio2_bit4 5
+#define gpio2_bit5 6
+#define gpio2_bit6 7
+#define gpio2_bit7 8
+#define gpio2_bit8 9
+#define gpio2_bit9 10
+#define gpio2_bit10 11
+#define gpio2_bit11 12
+#define gpio2_bit12 13
+#define gpio2_bit13 14
+#define gpio2_bit14 15
+#define gpio2_bit15 16
+
+#define gpio2_bit16 17
+#define gpio2_bit17 22
+#define gpio2_bit18 23
+// #define gpio2_bit19 24 // BROKEN
+#define gpio2_bit19 25
+
+// Pins in GPIO3
+#define gpio3_bit0 14
+#define gpio3_bit1 15
+#define gpio3_bit2 16
+#define gpio3_bit3 17
+#define gpio3_bit4 19
+#define gpio3_bit5 21
+
+
+#define GPIO2_LED_MASK  0x3c3fffe
+// (0\
+// |(1<<gpio2_bit0)\
+// |(1<<gpio2_bit1)\
+// |(1<<gpio2_bit2)\
+// |(1<<gpio2_bit3)\
+// |(1<<gpio2_bit4)\
+// |(1<<gpio2_bit5)\
+// |(1<<gpio2_bit6)\
+// |(1<<gpio2_bit7)\
+// |(1<<gpio2_bit8)\
+// |(1<<gpio2_bit9)\
+// |(1<<gpio2_bit10)\
+// |(1<<gpio2_bit11)\
+// |(1<<gpio2_bit12)\
+// |(1<<gpio2_bit13)\
+// |(1<<gpio2_bit14)\
+// |(1<<gpio2_bit15)\
+// |(1<<gpio2_bit16)\
+// |(1<<gpio2_bit17)\
+// |(1<<gpio2_bit18)\
+// |(1<<gpio2_bit19)\
+// |(1<<gpio2_bit20)\
+// )
+
+#define GPIO3_LED_MASK (0\
+|(1<<gpio3_bit0)\
+|(1<<gpio3_bit1)\
+|(1<<gpio3_bit2)\
+|(1<<gpio3_bit3)\
+)
+//|(1<<gpio3_bit4)\
+//|(1<<gpio3_bit5)\
+
 /** Register map */
 #define data_addr r0
 #define data_len r1
@@ -227,13 +298,14 @@ WORD_LOOP:
 		TEST_BIT(r15, gpio2, bit5)
 		TEST_BIT(r16, gpio2, bit6)
 		TEST_BIT(r17, gpio2, bit7)
-		TEST_BIT(r18, gpio2, bit9)
-		TEST_BIT(r19, gpio2, bit10)
-		TEST_BIT(r20, gpio2, bit11)
-		TEST_BIT(r21, gpio2, bit12)
-		TEST_BIT(r22, gpio2, bit13)
-		TEST_BIT(r23, gpio2, bit14)
-		TEST_BIT(r24, gpio2, bit15)
+		TEST_BIT(r18, gpio2, bit8)
+		TEST_BIT(r19, gpio2, bit9)
+		TEST_BIT(r20, gpio2, bit10)
+		TEST_BIT(r21, gpio2, bit11)
+		TEST_BIT(r22, gpio2, bit12)
+		TEST_BIT(r23, gpio2, bit13)
+		TEST_BIT(r24, gpio2, bit14)
+		TEST_BIT(r25, gpio2, bit15)
 
 		// Load 8 more registers of data
 		LBBO r10, r0, 40*4, 8*4
@@ -254,7 +326,7 @@ WORD_LOOP:
 		MOV r25, GPIO3 | GPIO_SETDATAOUT
 
 		// Wait until the end of the frame (including the time it takes to reset the counter)
-		WAITNS 1100, wait_frame_spacing_time
+		WAITNS 1150, wait_frame_spacing_time
 		RESET_COUNTER
 
 		// Send all the start bits
@@ -270,11 +342,11 @@ WORD_LOOP:
 		TEST_BIT(r11, gpio2, bit17)
 		TEST_BIT(r12, gpio2, bit18)
 		TEST_BIT(r13, gpio2, bit19)
-		TEST_BIT(r14, gpio2, bit20)
 		MOV gpio3_zeros, 0
-		TEST_BIT(r15, gpio3, bit0)
-		TEST_BIT(r16, gpio3, bit1)
-		TEST_BIT(r17, gpio3, bit2)
+		TEST_BIT(r14, gpio3, bit0)
+		TEST_BIT(r15, gpio3, bit1)
+		TEST_BIT(r16, gpio3, bit2)
+		TEST_BIT(r17, gpio3, bit3)
 
 		// wait for the length of the zero bits (250ns)
 		WAITNS 240, wait_zero_time
@@ -294,7 +366,6 @@ WORD_LOOP:
 	// Clear the 1 bits from the final frame 
 	MOV r22, GPIO2_LED_MASK
 	MOV r23, GPIO3_LED_MASK
-
 	MOV r12, GPIO2 | GPIO_CLEARDATAOUT
 	MOV r13, GPIO3 | GPIO_CLEARDATAOUT
 

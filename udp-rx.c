@@ -23,7 +23,7 @@ main(
 {
 	int port = 9999;
 	int num_pixels = 256;
-	int num_strips = 32; // not necessarily LEDSCAPE_NUM_STRIPS
+	int num_strips = LEDSCAPE_NUM_STRIPS;
 
 	const int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	struct sockaddr_in addr = {
@@ -56,7 +56,7 @@ main(
 
 		for(unsigned x=0 ; x < num_pixels ; x++)
 		{
-			for(unsigned strip = 0 ; strip < 32 ; strip++)
+			for(unsigned strip = 0 ; strip < num_strips ; strip++)
 			{
 				const uint8_t r = buf[strip*num_pixels*3 + x*3 + 0];
 				const uint8_t g = buf[strip*num_pixels*3 + x*3 + 1];

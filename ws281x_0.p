@@ -53,6 +53,73 @@
 
 #define NOP       mov r0, r0
 
+//===============================
+// GPIO Pin Mapping
+
+// Pins in GPIO0
+#define gpio0_bit0 2
+#define gpio0_bit1 3
+//#define gpio0_bit2 4 // BROKEN
+//#define gpio0_bit3 5 // BROKEN
+#define gpio0_bit2 7
+#define gpio0_bit3 8
+#define gpio0_bit4 9
+#define gpio0_bit5 10
+#define gpio0_bit6 11
+#define gpio0_bit7 14
+#define gpio0_bit8 20
+#define gpio0_bit9 22
+#define gpio0_bit10 23
+#define gpio0_bit11 26
+#define gpio0_bit12 27
+#define gpio0_bit13 30
+#define gpio0_bit14 31
+
+// Pins in GPIO1
+#define gpio1_bit0 12
+#define gpio1_bit1 13
+#define gpio1_bit2 14
+#define gpio1_bit3 15
+#define gpio1_bit4 16
+#define gpio1_bit5 17
+#define gpio1_bit6 18
+#define gpio1_bit7 19
+#define gpio1_bit8 28
+#define gpio1_bit9 29
+
+#define GPIO0_LED_MASK (0\
+|(1<<gpio0_bit0)\
+|(1<<gpio0_bit1)\
+|(1<<gpio0_bit2)\
+|(1<<gpio0_bit3)\
+|(1<<gpio0_bit4)\
+|(1<<gpio0_bit5)\
+|(1<<gpio0_bit6)\
+|(1<<gpio0_bit7)\
+|(1<<gpio0_bit8)\
+|(1<<gpio0_bit9)\
+|(1<<gpio0_bit10)\
+|(1<<gpio0_bit11)\
+|(1<<gpio0_bit12)\
+|(1<<gpio0_bit13)\
+|(1<<gpio0_bit14)\
+)
+
+#define GPIO1_LED_MASK (0\
+|(1<<gpio1_bit0)\
+|(1<<gpio1_bit1)\
+|(1<<gpio1_bit2)\
+|(1<<gpio1_bit3)\
+|(1<<gpio1_bit4)\
+|(1<<gpio1_bit5)\
+|(1<<gpio1_bit6)\
+|(1<<gpio1_bit7)\
+|(1<<gpio1_bit8)\
+)
+//|(1<<gpio1_bit9)\
+
+
+
 
 /** Register map */
 #define data_addr r0
@@ -239,7 +306,9 @@ WORD_LOOP:
 		TEST_BIT(r22, gpio0, bit12)
 		TEST_BIT(r23, gpio0, bit13)
 		TEST_BIT(r24, gpio0, bit14)
-		TEST_BIT(r25, gpio0, bit15)
+
+		MOV gpio1_zeros, 0
+		TEST_BIT(r25, gpio1, bit0)
 
 		// Load 8 more registers of data
 		LBBO r10, r0, 16*4, 8*4
@@ -262,7 +331,7 @@ WORD_LOOP:
 		MOV r23, GPIO1 | GPIO_SETDATAOUT
 
 		// Wait until the end of the frame (including the time it takes to reset the counter)
-		WAITNS 1100, wait_frame_spacing_time
+		WAITNS 1150, wait_frame_spacing_time
 		RESET_COUNTER
 
 		// Send all the start bits
@@ -274,15 +343,14 @@ WORD_LOOP:
 		MOV r23, GPIO1 | GPIO_CLEARDATAOUT
 
 		// Test some more bits to pass the time
-		MOV gpio1_zeros, 0
-		TEST_BIT(r10, gpio1, bit0)
-		TEST_BIT(r11, gpio1, bit1)
-		TEST_BIT(r12, gpio1, bit2)
-		TEST_BIT(r13, gpio1, bit3)
-		TEST_BIT(r14, gpio1, bit4)
-		TEST_BIT(r15, gpio1, bit5)
-		TEST_BIT(r16, gpio1, bit6)
-		TEST_BIT(r17, gpio1, bit7)
+		TEST_BIT(r10, gpio1, bit1)
+		TEST_BIT(r11, gpio1, bit2)
+		TEST_BIT(r12, gpio1, bit3)
+		TEST_BIT(r13, gpio1, bit4)
+		TEST_BIT(r14, gpio1, bit5)
+		TEST_BIT(r15, gpio1, bit6)
+		TEST_BIT(r16, gpio1, bit7)
+		TEST_BIT(r17, gpio1, bit8)
 
 		WAITNS 240, wait_zero_time
 
@@ -300,13 +368,13 @@ WORD_LOOP:
 	QBNE WORD_LOOP, data_len, #0
 
 	// Final clear for the word
-	WAITNS 1000, end_of_frame_clear_wait
-	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
 	MOV r20, GPIO0_LED_MASK
-	SBBO r20, r10, 0, 4
-
-	MOV r11, GPIO1 | GPIO_CLEARDATAOUT
 	MOV r21, GPIO1_LED_MASK
+	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
+	MOV r11, GPIO1 | GPIO_CLEARDATAOUT
+
+	WAITNS 1000, end_of_frame_clear_wait
+	SBBO r20, r10, 0, 4
 	SBBO r21, r11, 0, 4
 
     // Delay at least 50 usec; this is the required reset

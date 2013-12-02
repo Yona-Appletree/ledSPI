@@ -28,7 +28,7 @@
  * TODO: Find a way to unify this with the defines in the .p file
  */
 static const uint8_t gpios0[] = {
-	2, 3, 4, 5, 7, 8, 9, 10, 11, 14, 20, 22, 23, 26, 27, 30, 31
+	2, 3, 7, 8, 9, 10, 11, 14, 20, 22, 23, 26, 27, 30, 31
 };
 
 static const uint8_t gpios1[] = {
