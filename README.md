@@ -168,7 +168,7 @@ on the length of th elongest strip.
 API
 ===
 
-<ledscape.h> defines the API. The key components are:
+`ledscape.h` defines the API. The key components are:
 
 	ledscape_t * ledscape_init(unsigned num_pixels)
 	ledscape_frame_t * ledscape_frame(ledscape_t*, unsigned frame_num);
