@@ -1,33 +1,3 @@
-
-//     P9        P8 
-//01  n  n       n  n
-//02  n  n       n  n
-//03  n  n       n  n
-//04  n  n       y  y
-//05  n  n       y  y
-//06  y  n       y  y
-//07  n  y       y  y
-//08  y  y       y  y
-//09  n  n       y  y
-//10  n  n       y  n
-//11  y  y       n  n
-//12  y  n       n  n
-//13  n  y       n  n
-//14  n  n       y  n
-//15  y  y       y  y
-//16  y  n       y  y
-//17  n  n       y  y
-//18  n  n       y  y
-//19  n  n       y  y
-//20  n  n       y  y
-//21  y  y       y  y
-//22  n  n       y  y
-//23  n  n       y  y
-//    7  6      17 15
-
-
-      
-
 var pinData = [
 		{ header: 8, headerPin:  1,   gpioNum: 0   },    
 		{ header: 8, headerPin:  2, gpioNum: 0   },    
@@ -290,6 +260,6 @@ printTable("GPIO: BANK_BIT", function(p){ return p.gpioNum ? p.gpioName : "" });
 printTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
 printTable("LEDscape Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
 
-printTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
+//printTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
 console.info("Total Used Pins: " + totalVerifiedCount);
 console.info("Total Verified Pins: " + totalUsedPinCount);

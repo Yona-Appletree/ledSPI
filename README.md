@@ -73,6 +73,24 @@ You can now send data to UDP port 9999. The format is:
 	RGBRGB...RGBRGBRGB....RGB
 
 
+Disabling HDMI
+========
+
+If you need to use all 48 pins made available by LEDscape, you'll have
+to disable the HDMI "cape" on the BeagleBone Black.
+
+Mount the FAT32 partition, either through linux on the BeagleBone or
+by plugging the USB into a computer, and add the following to the
+first line of `uEnv.txt'
+
+	capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+
+It should read something like
+
+	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+
+Then reboot the BeagleBone Black.
+
 Implementation Notes
 ========
 
@@ -174,8 +192,9 @@ dma address or number of pixels.
 		volatile unsigned response;
 	} __attribute__((__packed__)) ws281x_command_t;
 
-Datasheets
+Reference
 ==========
 
+* 
 * http://www.adafruit.com/products/1138
 * http://www.adafruit.com/datasheets/WS2811.pdf
