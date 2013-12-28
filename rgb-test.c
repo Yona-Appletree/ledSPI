@@ -26,7 +26,7 @@ static void ledscape_fill_color(
 
 int main (void)
 {
-  const int num_pixels = 256;
+  const int num_pixels = 170;
   ledscape_t * const leds = ledscape_init(num_pixels);
   time_t last_time = time(NULL);
   unsigned last_i = 0;
@@ -61,10 +61,10 @@ int main (void)
           frame,
           strip,
           p,
-
-          rgb[0],
-          rgb[1],
-          rgb[2]
+          
+         rgb[0],
+         rgb[1],
+         rgb[2]
         );
         //ledscape_set_color(frame, strip, 3*p+1, 0, p+val + 80, 0);
         //ledscape_set_color(frame, strip, 3*p+2, 0, 0, p+val + 160);
