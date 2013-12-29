@@ -163,21 +163,22 @@ lab:
 
 /** Reset the cycle counter */
 .macro RESET_COUNTER
-		// Disable the counter and clear it, then re-enable it
-		MOV addr_reg, 0x22000 // control register
-		LBBO r9, addr_reg, 0, 4
-		CLR r9, r9, 3 // disable counter bit
-		SBBO r9, addr_reg, 0, 4 // write it back
+	// Disable the counter and clear it, then re-enable it
+	MOV addr_reg, 0x22000 // control register
 
-		MOV temp2_reg, 0
-		SBBO temp2_reg, addr_reg, 0xC, 4 // clear the timer
+	LBBO r9, addr_reg, 0, 4
+	CLR r9, r9, 3 // disable counter bit
+	SBBO r9, addr_reg, 0, 4 // write it back
 
-		SET r9, r9, 3 // enable counter bit
-		SBBO r9, addr_reg, 0, 4 // write it back
+	MOV temp2_reg, 0
+	SBBO temp2_reg, addr_reg, 0xC, 4 // clear the timer
 
-		// Read the current counter value
-		// Should be zero.
-		LBBO sleep_counter, addr_reg, 0xC, 4
+	SET r9, r9, 3 // enable counter bit
+	SBBO r9, addr_reg, 0, 4 // write it back
+
+	// Read the current counter value
+	// Should be zero.
+	LBBO sleep_counter, addr_reg, 0xC, 4
 .endm
 
 START:
@@ -210,35 +211,6 @@ START:
 
 	MOV r20, 0xFFFFFFFF
 
-	/*
-// Enable to generate a reference signal of 010101... to GPIO0
-_REFERENCE_SIGNAL_LOOP:
-	// Send 0
-	MOV r10, GPIO0 | GPIO_SETDATAOUT
-	SBBO r20, r10, 0, 4
-	SLEEPNS 250, 3, after_set0_wait_loop
-
-	NOP
-
-	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
-	SBBO r20, r10, 0, 4
-	SLEEPNS 1000, 3, after_clear0_wait_loop
-
-	NOP
-
-	// Send 1
-	MOV r10, GPIO0 | GPIO_SETDATAOUT
-	SBBO r20, r10, 0, 4
-	SLEEPNS 1000, 3, after_set1_wait_loop
-
-	NOP
-
-	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
-	SBBO r20, r10, 0, 4
-	SLEEPNS 250, 3, after_clear1_wait_loop
-
-	QBA _REFERENCE_SIGNAL_LOOP */
-
     // Wait for the start condition from the main program to indicate
     // that we have a rendered frame ready to clock out.  This also
     // handles the exit case if an invalid value is written to the start
@@ -266,16 +238,7 @@ _LOOP:
 
     ////////////////
     // PREAMBLE
-	MOV r20, GPIO0_LED_MASK
-	MOV r21, GPIO1_LED_MASK
-
-	// HIGH for about 2ms
-	MOV r22, GPIO0 | GPIO_SETDATAOUT
-	MOV r23, GPIO1 | GPIO_SETDATAOUT
-	SBBO r20, r22, 0, 4
-	SBBO r21, r23, 0, 4
-	SLEEPNS 2104800, 4, wait_preamble_high
-
+	
 	// LOW for 220us
 	MOV r22, GPIO0 | GPIO_CLEARDATAOUT
 	MOV r23, GPIO1 | GPIO_CLEARDATAOUT
@@ -303,12 +266,10 @@ _LOOP:
 	// HIGH for 8us is handled by the first byte
 	RESET_COUNTER
 
-WORD_LOOP:
-	// for bit in 24 to 0
+WORD_LOOP: // bit_num=0; do { bit_num++; send_bit(); } while (bit_num < 24)
 	MOV bit_num, 0
 
 	BIT_LOOP:
-		ADD bit_num, bit_num, 1
 		/** Macro to generate the mask of which bits are zero.
 		 * For each of these registers, set the
 		 * corresponding bit in the gpio0_zeros register if
@@ -346,7 +307,6 @@ WORD_LOOP:
 
 		// Load 8 more registers of data
 		LBBO r10, r0, 16*4, 8*4
-		
 
 		TEST_BIT(r10, gpio1, bit1)
 		TEST_BIT(r11, gpio1, bit2)
@@ -368,10 +328,9 @@ WORD_LOOP:
 
 		//////////////////////////
 		// POTENTIAL STOP BIT
-		// Stop bits happen after bits 15, 7 (....111)
+		// Stop bits happen after bits 0, 8, 16
 		AND r22, bit_num, 7
-		QBNE skip_clear_bit, r22, 0
-			
+		QBNE skip_stop_bits, r22, 0
 			// HIGH (all)
 			MOV r22, GPIO0 | GPIO_SETDATAOUT
 			MOV r23, GPIO1 | GPIO_SETDATAOUT
@@ -392,8 +351,7 @@ WORD_LOOP:
 
 			RESET_COUNTER
 
-		skip_clear_bit:
-
+		skip_stop_bits:
 
 		// FRAME END
 		//////////////////////////
@@ -401,6 +359,8 @@ WORD_LOOP:
 
 		//////////////////////////
 		// FRAME START
+
+		ADD bit_num, bit_num, 1
 
 		// Start of the next timing frame
 		RESET_COUNTER
@@ -427,6 +387,17 @@ WORD_LOOP:
 	ADD data_addr, data_addr, 48 * 4
 	SUB data_len, data_len, 1
 	QBNE WORD_LOOP, data_len, #0
+
+	// Write the trailing high (and leave the line high)
+	MOV r20, GPIO0_LED_MASK
+	MOV r21, GPIO1_LED_MASK
+
+	// HIGH for about 2ms
+	MOV r22, GPIO0 | GPIO_SETDATAOUT
+	MOV r23, GPIO1 | GPIO_SETDATAOUT
+	SBBO r20, r22, 0, 4
+	SBBO r21, r23, 0, 4
+	SLEEPNS 2104800, 4, wait_end_high
 
     // Write out that we are done!
     // Store a non-zero response in the buffer so that they know that we are done
