@@ -43,17 +43,17 @@ int main (void)
 
     uint8_t val = i >> 1;
     uint16_t r = ((i >>  0) & 0xFF);
-    uint16_t g = ((i >>  8) & 0xFF);
-    uint16_t b = ((i >> 16) & 0xFF);
+    uint16_t g = ((i >>  4) & 0xFF);
+    uint16_t b = ((i >>  8) & 0xFF);
 
     for (unsigned strip = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
     {
       for (unsigned p = 0 ; p < num_pixels; p++)
       {
         HSBtoRGB(
-          ((i/10 + (p*360)/num_pixels) % 360), 
-          (i/5 + p)%100 < 10 ? 255: 100, 
-          (i/5 + p)%100 < 10 ? 200: 40,
+          ((i + (p*360)/num_pixels) % 360), 
+          100, 
+          219,
           rgb
         );
 
