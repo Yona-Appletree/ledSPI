@@ -109,4 +109,7 @@ ledscape_close(
 	ledscape_t * const leds
 );
 
+
+extern const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode);
+
 #endif

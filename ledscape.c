@@ -259,3 +259,17 @@ ledscape_set_color(
 	p->g = g;
 	p->b = b;
 }
+
+const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
+	switch (mode) {
+		case WS281x: return "WS281x";
+		case DMX: return "DMX";
+		default: return "unknown";
+	}
+}
+
+const ledscape_output_mode_t ledscape_output_mode_from_string(const char* input) {
+	if (strcmp(input, "WS281x") == 0) return WS281x;
+	else if (strcmp(input, "DMX") == 0) return DMX;
+	else return WS281x;
+}
