@@ -61,7 +61,8 @@ static struct {
 	ledscape_output_mode_t pru0_mode;
 	ledscape_output_mode_t pru1_mode;
 
-	uint16_t port;
+	uint16_t tcp_port;
+	uint16_t udp_port;
 	uint16_t leds_per_strip;
 
 	uint8_t interpolation_enabled;
@@ -81,7 +82,8 @@ static struct {
 } g_server_config = {
 	.pru0_mode = WS281x,
 	.pru1_mode = WS281x,
-	.port = 7890,
+	.tcp_port = 7890,
+	.udp_port = 7890,
 	.leds_per_strip = 176,
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
@@ -158,7 +160,8 @@ static struct
 // main()
 static struct option long_options[] =
 {
-    {"port", optional_argument, NULL, 'p'},
+    {"tcp-port", optional_argument, NULL, 'p'},
+    {"udp-port", optional_argument, NULL, 'P'},
     {"count", optional_argument, NULL, 'c'},
     {"dimensions", optional_argument, NULL, 'd'},
 
@@ -182,12 +185,16 @@ int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:c:d:itlL:r:g:b:0:1:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:d:itlL:r:g:b:0:1:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
 		case 'p': {
-			g_server_config.port = atoi(optarg);
+			g_server_config.tcp_port = atoi(optarg);
+		} break;
+
+		case 'P': {
+			g_server_config.udp_port = atoi(optarg);
 		} break;
 
 		case 'c': {
@@ -266,17 +273,19 @@ int main(int argc, char ** argv)
 	sprintf(
 		g_server_config.json,
 		"{\n"
-			"\t" "\"pru0_mode\": \"%s\"," "\n"
-			"\t" "\"pru1_mode\": \"%s\"," "\n"
-			"\t" "\"leds_per_strip\": %d," "\n"
+			"\t" "\"pru0Mode\": \"%s\"," "\n"
+			"\t" "\"pru1Mode\": \"%s\"," "\n"
+			"\t" "\"ledsPerStrip\": %d," "\n"
 
-			"\t" "\"port\": %d," "\n"
-			"\t" "\"enable_interpolation\": %s," "\n"
-			"\t" "\"enable_dithering\": %s," "\n"
-			"\t" "\"enable_lookup_table\": %s," "\n"
+			"\t" "\"tcpPort\": %d," "\n"
+			"\t" "\"udpPort\": %d," "\n"
 
-			"\t" "\"lum_curve_power\": %.4f," "\n"
-			"\t" "\"white_point\": {," "\n"
+			"\t" "\"enableInterpolation\": %s," "\n"
+			"\t" "\"enableDithering\": %s," "\n"
+			"\t" "\"enableLookupTable\": %s," "\n"
+
+			"\t" "\"lumCurvePower\": %.4f," "\n"
+			"\t" "\"whitePoint\": {" "\n"
 			"\t\t" "\"red\": %.4f," "\n"
 			"\t\t" "\"green\": %.4f," "\n"
 			"\t\t" "\"blue\": %.4f" "\n"
@@ -288,7 +297,8 @@ int main(int argc, char ** argv)
 
 		g_server_config.leds_per_strip,
 
-		g_server_config.port,
+		g_server_config.tcp_port,
+		g_server_config.udp_port,
 
 		g_server_config.interpolation_enabled ? "true" : "false",
 		g_server_config.dithering_enabled ? "true" : "false",
@@ -300,7 +310,10 @@ int main(int argc, char ** argv)
 		(double)g_server_config.white_point.blue
 	);
 
-	fprintf(stderr, "[main] Starting server on port %d for %d pixels on %d strips\n", g_server_config.port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS);
+	fprintf(stderr,
+		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
+		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+	);
 	fprintf(stderr, g_server_config.json);
 
 	build_lookup_tables();
@@ -531,7 +544,7 @@ void* render_thread(void* unused_data)
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
-		uint32_t maxDitherFrames = 10000 / delta_avg;
+		uint32_t maxDitherFrames = 16667 / delta_avg;
 
 		for (uint32_t strip_index=0; strip_index<LEDSCAPE_NUM_STRIPS; strip_index++) {
 			for (uint32_t led_index=0; led_index<leds_per_strip; led_index++, data_index++) {
@@ -676,7 +689,7 @@ typedef enum
 void* udp_server_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "Starting UDP server on port %d\n", g_server_config.port);
+	fprintf(stderr, "Starting UDP server on port %d\n", g_server_config.udp_port);
 
 	// Gen some fake data!
 	uint32_t count = g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3;
@@ -730,13 +743,13 @@ void* tcp_server_thread(void* unused_data)
 
 
 	pthread_mutex_lock(&g_server_config.mutex);
-	fprintf(stderr, "[tcp] Starting TCP server on port %d\n", g_server_config.port);
+	fprintf(stderr, "[tcp] Starting TCP server on port %d\n", g_server_config.tcp_port);
 
-	const int sock = tcp_socket(g_server_config.port);
+	const int sock = tcp_socket(g_server_config.tcp_port);
 	pthread_mutex_unlock(&g_server_config.mutex);
 
 	if (sock < 0)
-		die("[tcp] socket port %d failed: %s\n", g_server_config.port, strerror(errno));
+		die("[tcp] socket port %d failed: %s\n", g_server_config.tcp_port, strerror(errno));
 
 	uint8_t buf[65536];
 
