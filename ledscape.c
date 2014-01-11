@@ -185,7 +185,7 @@ ledscape_init(
 		pru_gpio(3, gpios3[i], 1, 0);
 
 	// Initiate the PRU0 program
-	pru_exec(pru0, "./dmx_0.bin");
+	pru_exec(pru0, "./ws281x_0.bin");
 
 	// Watch for a done response that indicates a proper startup
 	// \todo timeout if it fails
