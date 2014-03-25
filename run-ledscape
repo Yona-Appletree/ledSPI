@@ -4,3 +4,4 @@ cd "$DIRNAME"
 
 modprobe uio_pruss
 exec ./udp-rx
+# exec ./daemon
