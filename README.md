@@ -58,12 +58,16 @@ Once everything is connected, run the `rgb-test` program:
 The LEDs should now be fading prettily. If not, go back and make
 sure everything is setup correctly.
 
+Open Pixel Control Server
+=========================
 
-At this point, you will probably want to install the ledscape service
-which will run the UDP->LEDscape bridge on port 9999. You can then
-send data to LEDscape from other programs or computers.
+Setup
+-----
 
-To install/start the service on Anstrom:
+Once you have LEDscape sending data to your pixels, you will probably
+want to use the `opc-rx` server which accepts Open Pixel Control data
+and passes it on to LEDscape. There is an angstrom-compatible service
+checked in, which can be installed like so:
 
 	sudo systemctl enable /path/to/LEDscape/ledscape.service
 	sudo systemctl start ledscape
@@ -75,8 +79,17 @@ If you would prefer to run the receiver without adding it as a service:
 
 	sudo run-ledscape
 	
-By default LEDscape is configured for strings of 256 pixels. You can 
-adjust this by editing the run script and editing the parameters to opc-rx.
+By default LEDscape is configured for strings of 256 pixels, accepting OPC
+data on port 7890. You can adjust this by editing the run script and 
+editing the parameters to opc-rx.
+
+Data Format
+-----------
+
+The `opc-rx` server accepts data on OPC channel 0. It expects the data for
+each LED strip concatonated together. This is done because LEDscape requires
+that data for all strips be present at once before flushing data data out to
+the LEDs. 
 
 
 Processing Example
@@ -86,7 +99,8 @@ The easiest way to see that LEDscape can receive arbitrary data is to run
 the included Processing sketch, based on the examples from 
 FadeCandy (https://github.com/scanlime/fadecandy). There is a 16x16 panel
 example in processing/grid16x16_clouds. Edit the example to point at your
-beaglebone's hostname or IP and you should be set.
+beaglebone's hostname or IP and run 
+
 
 Hardware Tips
 ========
