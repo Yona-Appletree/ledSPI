@@ -105,16 +105,16 @@ main(
 
 	ledscape_t * const leds = ledscape_init(led_count);
 
-	const unsigned report_interval = 10;
+	const unsigned report_interval = 1;
 	unsigned last_report = 0;
 	unsigned long delta_sum = 0;
 	unsigned frames = 0;
 
-	uint32_t * const fb = calloc(image_size,4);
-
 	int fd;
+	unsigned frame_num = 0;
 	while ((fd = accept(sock, NULL, NULL)) >= 0)
 	{
+		printf("Client connected!");
 		while(1)
 		{
 			opc_cmd_t cmd;
@@ -128,7 +128,8 @@ main(
 			}
 
 			const size_t cmd_len = cmd.len_hi << 8 | cmd.len_lo;
-			warn("received %zu bytes: %d %zu\n", rlen, cmd.command, cmd_len);
+
+//			warn("received %zu bytes: %d %zu\n", rlen, cmd.command, cmd_len);
 
 			size_t offset = 0;
 			while (offset < cmd_len)
@@ -147,17 +148,24 @@ main(
 			struct timeval start_tv, stop_tv, delta_tv;
 			gettimeofday(&start_tv, NULL);
 
-			const unsigned frame_num = 0;
+			frame_num = frame_num == 0 ? 1 : 0;
+			ledscape_frame_t * const frame = ledscape_frame(leds, frame_num);
 
-			for (unsigned int i=0; i<image_size; i++) {
-				uint8_t * const out = (void*) &fb[i];
+			int given_pixels = cmd_len / 3;
+			for (unsigned int i=0, s=0, p=0; i<given_pixels && i<led_count; i++, p++) {
+				if (p >= led_count) {
+					s ++;
+					p = 0;
+				}
 				const uint8_t * const in = &buf[3 * i];
-				out[0] = in[0];
-				out[1] = in[1];
-				out[2] = in[2];
+				ledscape_pixel_t * const px = &frame[p].strip[s];
+				px->r = in[0];
+				px->g = in[1];
+				px->b = in[2];
 			}
 
-			ledscape_draw(leds, fb);
+			ledscape_draw(leds, frame_num);
+			const uint32_t response = ledscape_wait(leds);
 
 			gettimeofday(&stop_tv, NULL);
 			timersub(&stop_tv, &start_tv, &delta_tv);
@@ -169,16 +177,19 @@ main(
 			last_report = stop_tv.tv_sec;
 
 			const unsigned delta_avg = delta_sum / frames;
-			printf("%6u usec avg, max %.2f fps, actual %.2f fps (over %u frames)\n",
+			printf("%6u usec avg, max %.2f fps, actual %.2f fps (over %u frames)  res=%"PRIx32"\n",
 				delta_avg,
 				report_interval * 1.0e6 / delta_avg,
 				frames * 1.0 / report_interval,
-				frames
+				frames,
+				response
 			);
 
 			frames = delta_sum = 0;
 		}
 	}
 
-	return 0;
+  ledscape_close(leds);
+
+  return EXIT_SUCCESS;
 }

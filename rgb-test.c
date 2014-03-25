@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include "ledscape.h"
 
 static void ledscape_fill_color(
@@ -26,7 +27,7 @@ static void ledscape_fill_color(
 
 int main (void)
 {
-  const int num_pixels = 170;
+  const int num_pixels = 256;
   ledscape_t * const leds = ledscape_init(num_pixels);
   time_t last_time = time(NULL);
   unsigned last_i = 0;
@@ -34,17 +35,27 @@ int main (void)
   uint8_t rgb[3];
 
   unsigned i = 0;
+
+
+  const unsigned report_interval = 1;
+  unsigned last_report = 0;
+  unsigned long delta_sum = 0;
+  unsigned frames = 0;
+
   while (1)
   {
     // Alternate frame buffers on each draw command
     const unsigned frame_num = i++ % 2;
-    ledscape_frame_t * const frame
-      = ledscape_frame(leds, frame_num);
+    
+      struct timeval start_tv, stop_tv, delta_tv;
+    gettimeofday(&start_tv, NULL);
+    ledscape_frame_t * const frame = ledscape_frame(leds, frame_num);
 
     uint8_t val = i >> 1;
     uint16_t r = ((i >>  0) & 0xFF);
     uint16_t g = ((i >>  4) & 0xFF);
     uint16_t b = ((i >>  8) & 0xFF);
+
 
     for (unsigned strip = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
     {
@@ -71,18 +82,28 @@ int main (void)
       }
     }
 
-    // wait for the previous frame to finish;
     const uint32_t response = ledscape_wait(leds);
-    time_t now = time(NULL);
-
-    if (now != last_time)
-    {
-      printf("%d fps. starting %d previous %"PRIx32"\n", i - last_i, i, response);
-      last_i = i;
-      last_time = now;
-    }
-
     ledscape_draw(leds, frame_num);
+
+    gettimeofday(&stop_tv, NULL);
+    timersub(&stop_tv, &start_tv, &delta_tv);
+
+    frames++;
+    delta_sum += delta_tv.tv_usec;
+    if (stop_tv.tv_sec - last_report < report_interval)
+      continue;
+    last_report = stop_tv.tv_sec;
+
+    const unsigned delta_avg = delta_sum / frames;
+    printf("%6u usec avg, max %.2f fps, actual %.2f fps (over %u frames)  res=%"PRIx32"\n",
+      delta_avg,
+      report_interval * 1.0e6 / delta_avg,
+      frames * 1.0 / report_interval,
+      frames,
+      response
+    );
+
+    frames = delta_sum = 0;
   }
 
   ledscape_close(leds);
