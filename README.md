@@ -1,6 +1,21 @@
-![Testing LEDscape](http://farm4.staticflickr.com/3834/9378678019_b706c55635_z.jpg)
+Overview
+========
 
-DANGER!
+LEDscape is a library for controlling 48 channels of WS2811-based LEDs from
+a single Beagle Bone Black. It makes use of the two Programmable Realtime Units (PRUs),
+each controlling 24 outputs. It can drive strings of 256 LEDs at around 60fps
+and 512 LEDs at 30 LEDs, enabling a single BBB to control 24,576 LEDs at once.
+
+The libary can be used directly from C or C++ or data can be sent using the
+Open Pixel Control protocol (http://openpixelcontrol.org) from a variety of
+sources (e.g. Processing, Java, Python, etc...)
+
+This version of the library has evolved significantly from it's original source
+and has been tailored for driving large quantities of WS2812 LEDs, as opposed to
+other types of LED panel.
+
+
+WARNING
 =======
 
 This code works with the PRU units on the Beagle Bone and can easily
@@ -8,22 +23,6 @@ cause *hard crashes*.  It is still being debugged and developed.
 Be careful hot-plugging things into the headers -- it is possible to
 damage the pin drivers and cause problems in the ARM, especially if
 there are +5V signals involved.
-
-
-Overview
-========
-
-This is a modified version of the LEDscape library designed to control
-up to 48 chains of WS2811-based LED modules from a Beagle Bone Black. The
-timing has been updated and verified to work with both WS2812 and WS2812b
-chips. This version of the library uses both PRUs on the Beagle Bone Black
-and has approximately 2x the framerate of the original library. This allows
-sending at about 60fps to strings of 512 pixels or at ~120fps for 256 pixels.
-
-To achieve the higher frame rate and port count, this version of LEDscape makes
-use of both PRUs; each one driving 24 ports. The bit-unpacking is still handled
-by the PRU, which allows LEDscape to take almost no cpu time to run, freeing
-up time for the actual generation of animations or dealing with network protocols.
 
 
 Installation and Usage
@@ -54,31 +53,53 @@ or other technique to bring the BBB's 3.3v signals up to 5v.
 
 Once everything is connected, run the `rgb-test` program:
 
-	./rgb-test
+	sudo rgb-test
 
 The LEDs should now be fading prettily. If not, go back and make
 sure everything is setup correctly.
+
 
 At this point, you will probably want to install the ledscape service
 which will run the UDP->LEDscape bridge on port 9999. You can then
 send data to LEDscape from other programs or computers.
 
-To install the service:
+To install/start the service on Anstrom:
 
-	systemctl enable /path/to/LEDscape/ledscape.service
-
-To start or stop the service:
-
-	systemctl start ledscape
+	sudo systemctl enable /path/to/LEDscape/ledscape.service
+	sudo systemctl start ledscape
 
 Note that you must specify an absolute path. Relative paths will not
 work with systemctl to enable services.
 
-You can now send data to UDP port 9999. The format is:
+If you would prefer to run the receiver without adding it as a service:
 
-	Strip 0     Strip 1   Strip 2
-	RGBRGB...RGBRGBRGB....RGB
+	sudo run-ledscape
+	
+By default LEDscape is configured for strings of 256 pixels. You can 
+adjust this by editing the run script and editing the parameters to opc-rx.
 
+
+Processing Example
+========
+
+The easiest way to see that LEDscape can receive arbitrary data is to run
+the included Processing sketch, based on the examples from 
+FadeCandy (https://github.com/scanlime/fadecandy). There is a 16x16 panel
+example in processing/grid16x16_clouds. Edit the example to point at your
+beaglebone's hostname or IP and you should be set.
+
+Hardware Tips
+========
+
+Connecting the LEDs to the correct pins and level-shifting the voltages
+to 5v can be quite complex when using many output ports of the BBB. While
+there may be others, RGB123 makes an execellent 24-pin cape designed 
+specifically for this version of LEDscape: http://rgb-123.com/product/beaglebone-black-24-output-cape/
+
+If you do not use a cape, refer to the pin mapping section below and remember
+that the BBB outputs data at 3.3v. If you run your LEDs at 5v (which most are),
+you will need to use a level-shifter of some sort. Adafruit has a decent one
+which works well: http://www.adafruit.com/products/757
 
 Disabling HDMI
 ========
@@ -97,6 +118,7 @@ It should read something like
 	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 
 Then reboot the BeagleBone Black.
+
 
 Pin Mapping
 ========
@@ -132,8 +154,10 @@ As of this writing, it generates the following:
 	  21   41     8       2     42   |   41    33      34     42   21
 	  22   43                   44   |   43    31      32     44   22
 	  23   45                   46   |   45    29      30     46   23
-
-The numbers on the inside of each block indicate the LEDscape channel.
+	  
+	              ^       ^                    ^       ^
+	              |-------|--------------------|-------|
+	                     LEDscape Channel Indexes
 
 
 Implementation Notes
@@ -241,3 +265,4 @@ Reference
 ==========
 * http://www.adafruit.com/products/1138
 * http://www.adafruit.com/datasheets/WS2811.pdf
+* http://processors.wiki.ti.com/index.php/PRU_Assembly_Instructions
