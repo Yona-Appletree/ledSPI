@@ -129,7 +129,7 @@ main(
 
 			const size_t cmd_len = cmd.len_hi << 8 | cmd.len_lo;
 
-//			warn("received %zu bytes: %d %zu\n", rlen, cmd.command, cmd_len);
+			//warn("cmd=%d; size=%zu\n", cmd.command, cmd_len);
 
 			size_t offset = 0;
 			while (offset < cmd_len)
@@ -152,10 +152,12 @@ main(
 			ledscape_frame_t * const frame = ledscape_frame(leds, frame_num);
 
 			int given_pixels = cmd_len / 3;
-			for (unsigned int i=0, s=0, p=0; i<given_pixels && i<led_count; i++, p++) {
+			for (unsigned int i=0, s=0, p=0; i<given_pixels; i++, p++) {
 				if (p >= led_count) {
 					s ++;
 					p = 0;
+
+					if (s >= LEDSCAPE_NUM_STRIPS) break;
 				}
 				const uint8_t * const in = &buf[3 * i];
 				ledscape_pixel_t * const px = &frame[p].strip[s];
