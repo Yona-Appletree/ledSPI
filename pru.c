@@ -37,7 +37,7 @@ pru_init(
 	const unsigned short pru_num
 )
 {
-	prussdrv_init();		
+	prussdrv_init();
 
 	int ret = prussdrv_open(PRU_EVTOUT_0);
 	if (ret)
@@ -48,7 +48,7 @@ pru_init(
 
 	void * pru_data_mem;
 	prussdrv_map_prumem(
-		pru_num == 0 ? PRUSS0_PRU0_DATARAM :PRUSS0_PRU1_DATARAM,
+		pru_num == 0 ? PRUSS0_PRU0_DATARAM : PRUSS0_PRU1_DATARAM,
 		&pru_data_mem
 	);
 
@@ -119,6 +119,12 @@ pru_exec(
 		die("%s failed", program);
 }
 
+void
+pru_wait_interrupt(pru_t * const pru) {
+    prussdrv_pru_wait_event (PRU_EVTOUT_0);
+    // Handle event
+    prussdrv_pru_clear_event (PRU0_ARM_INTERRUPT);
+}
 
 void
 pru_close(

@@ -115,6 +115,9 @@ ledscape_wait(
 {
 	while (1)
 	{
+		pru_wait_interrupt(leds->pru0);
+		pru_wait_interrupt(leds->pru1);
+		
 		uint32_t response0 = leds->ws281x_0->response;
 		uint32_t response1 = leds->ws281x_1->response;
 
@@ -122,12 +125,11 @@ ledscape_wait(
 		// 	leds->ws281x_0->command, leds->ws281x_0->response,
 		// 	leds->ws281x_1->command, leds->ws281x_1->response
 		// );
-
-		if (response0 && response1) {
-			leds->ws281x_0->response = leds->ws281x_1->response = 0;
-			// TODO: How to handle both return values?
-			return response0;
-		}
+		
+		if (!response0 || !response1)
+			continue;
+		
+		return response0;
 	}
 }
 

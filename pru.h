@@ -46,6 +46,10 @@ pru_close(
 );
 
 
+extern void
+pru_wait_interrupt(
+  pru_t * const pru
+);
 
 /** Configure a GPIO pin.
  *
