@@ -22,9 +22,9 @@ main(
 	char ** argv
 )
 {
-	int port = 9999;
-	int num_pixels = 256;
-	int num_strips = LEDSCAPE_NUM_STRIPS;
+	uint16_t port = 9999;
+	uint16_t num_pixels = 256;
+	uint16_t num_strips = LEDSCAPE_NUM_STRIPS;
 
 	extern char *optarg;
 	int opt;
@@ -71,6 +71,7 @@ main(
 	ledscape_t * const leds = ledscape_init(num_pixels);
 
 	fprintf(stderr, "Started LEDscape UDP receiver on port %d for %d pixels\n", port, num_pixels);
+	fprintf(stderr, "WARNING: udp-rx is deprecated! opc-rx supports more options and should be used instead.\n\n");
 
 	unsigned frame_num = 0;
 
@@ -89,9 +90,9 @@ main(
 		ledscape_frame_t * const frame
 			= ledscape_frame(leds, frame_num);
 
-		for(unsigned x=0 ; x < num_pixels ; x++)
+		for(uint16_t x=0 ; x < num_pixels ; x++)
 		{
-			for(unsigned strip = 0 ; strip < num_strips ; strip++)
+			for(uint16_t strip = 0 ; strip < num_strips ; strip++)
 			{
 				const uint8_t r = buf[strip*num_pixels*3 + x*3 + 0];
 				const uint8_t g = buf[strip*num_pixels*3 + x*3 + 1];

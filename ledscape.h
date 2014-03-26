@@ -44,10 +44,22 @@ typedef struct {
 
 typedef struct ledscape ledscape_t;
 
+typedef enum {
+	WS281x = 0,
+	DMX = 1
+} ledscape_output_mode_t;
+
 
 extern ledscape_t *
 ledscape_init(
 	unsigned num_pixels
+);
+
+extern ledscape_t *
+ledscape_init_with_modes(
+	unsigned num_pixels,
+	ledscape_output_mode_t pru0_mode,
+	ledscape_output_mode_t pru1_mode
 );
 
 

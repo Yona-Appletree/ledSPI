@@ -148,6 +148,16 @@ ledscape_init(
 	unsigned num_pixels
 )
 {
+	return ledscape_init_with_modes(num_pixels, WS281x, WS281x);
+}
+
+ledscape_t *
+ledscape_init_with_modes(
+	unsigned num_pixels,
+	ledscape_output_mode_t pru0_mode,
+	ledscape_output_mode_t pru1_mode
+)
+{
 	pru_t * const pru0 = pru_init(0);
 	pru_t * const pru1 = pru_init(1);
 
@@ -188,21 +198,41 @@ ledscape_init(
 		pru_gpio(3, gpios3[i], 1, 0);
 
 	// Initiate the PRU0 program
-	pru_exec(pru0, "./ws281x_0.bin");
+	const char* pru0_program_filename;
+	switch (pru0_mode) {
+		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
+		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
+		default: 
+			warn("Invalid PRU0 Mode.");
+			exit(-1);
+	}
+	pru_exec(pru0, pru0_program_filename);
 
 	// Watch for a done response that indicates a proper startup
 	// \todo timeout if it fails
-	fprintf(stdout, "waiting for response from pru0... ");
+	fprintf(stdout, "String PRU0 with %s %d... ", pru0_program_filename);
 	while (!leds->ws281x_0->response);
 	printf("OK\n");
 
 
 	// Initiate the PRU1 program
-	pru_exec(pru1, "./ws281x_1.bin");
+	const char* pru1_program_filename;
+	switch (pru1_mode) {
+		case WS281x: pru1_program_filename = "./ws281x_1.bin"; break;
+		case DMX:
+			warn("PRU1 does not currently support DMX.");
+			exit(-1);
+			//pru1_program_filename = "./dmx_1.bin";
+		break;
+		default: 
+			warn("Invalid PRU1 Mode.");
+			exit(-1);
+	}
+	pru_exec(pru1, pru1_program_filename);
 
 	// Watch for a done response that indicates a proper startup
 	// \todo timeout if it fails
-	fprintf(stdout, "waiting for response from pru1... ");
+	fprintf(stdout, "String PRU1 with %s... ", pru1_program_filename);
 	while (!leds->ws281x_1->response);
 	printf("OK\n");
 
