@@ -9,6 +9,7 @@
 #define _ledscape_h_
 
 #include <stdint.h>
+#include "pru.h"
 
 /** The number of strips supported.
  *
@@ -41,14 +42,23 @@ typedef struct {
 	ledscape_pixel_t strip[LEDSCAPE_NUM_STRIPS];
 } __attribute__((__packed__)) ledscape_frame_t;
 
-
-typedef struct ledscape ledscape_t;
-
 typedef enum {
 	WS281x = 0,
 	DMX = 1
 } ledscape_output_mode_t;
 
+typedef struct ws281x_command ws281x_command_t;
+
+typedef struct {
+	ws281x_command_t * ws281x_0;
+	ws281x_command_t * ws281x_1;
+	pru_t * pru0;
+	pru_t * pru1;
+	ledscape_output_mode_t pru0_mode;
+	ledscape_output_mode_t pru1_mode;
+	unsigned num_pixels;
+	size_t frame_size;
+} ledscape_t;
 
 extern ledscape_t *
 ledscape_init(

@@ -1,0 +1,34 @@
+### BEGIN INIT INFO
+# Provides: ledscape-server
+# Required-Start: $local_fs $remote_fs
+# Required-Stop:
+# X-Start-Before:
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Starts the LEDscape server
+### END INIT INFO
+ 
+LEDSCAPE=/root/LEDscape/run-ledscape
+LEDSCAPE_ARGS=""
+PIDFILE=/var/run/ledscape-server.pid
+case "$1" in
+  start)
+    echo -n "Starting LEDScape Server: ledscape-server"
+    start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile --background --exec $LEDSCAPE -- $LEDSCAPE_ARGS
+    echo "."
+    ;;
+  stop)
+    echo -n "Stopping LEDScape Server: ledscape-server"
+    start-stop-daemon --stop --quiet --pidfile $PIDFILE
+    echo "."
+    ;;
+  restart)
+    $0 stop
+    $0 start
+    ;;
+  *)
+        echo "Usage: /etc/init.d/xvfb {start|stop|restart}"
+        exit 1
+esac
+ 
+exit 0
