@@ -89,14 +89,15 @@ ledscape_draw(
 	unsigned int frame
 )
 {
-	// Zero the responses so we can wait for them
-	leds->ws281x_0->response = leds->ws281x_1->response = 0;
 
 	leds->ws281x_0->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
 	leds->ws281x_1->pixels_dma = leds->pru0->ddr_addr + leds->frame_size * frame;
 
 	// Wait for any current command to have been acknowledged
 	while (leds->ws281x_0->command || leds->ws281x_1->command);
+
+	// Zero the responses so we can wait for them
+	leds->ws281x_0->response = leds->ws281x_1->response = 0;
 
 	// Send the start command
 	leds->ws281x_0->command = 1;
