@@ -44,13 +44,14 @@
 
 // Frame Manipulation
 void ensure_frame_data();
-void set_next_frame_data(uint8_t* frame_data, uint32_t data_size);
+void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_remote);
 void rotate_frames();
 
 // Threads
 void* render_thread(void* threadarg);
 void* udp_server_thread(void* threadarg);
 void* tcp_server_thread(void* threadarg);
+void* demo_thread(void* threadarg);
 
 // Config Methods
 void build_lookup_tables();
@@ -135,6 +136,8 @@ static struct
 	uint32_t green_lookup[257];
 	uint32_t blue_lookup[257];
 
+	struct timeval last_remote_data_tv;
+
 	pthread_mutex_t mutex;
 } g_frame_data = {
 	.previous_frame_data = (buffer_pixel_t*)NULL,
@@ -145,6 +148,10 @@ static struct
 	.frame_size = 0,
 	.frame_count = 0,
 	.mutex = PTHREAD_MUTEX_INITIALIZER,
+	.last_remote_data_tv = {
+		.tv_sec = 0,
+		.tv_usec = 0
+	},
 	.leds = NULL
 };
 
@@ -153,6 +160,7 @@ static struct
 	pthread_t render_thread;
 	pthread_t tcp_server_thread;
 	pthread_t udp_server_thread;
+	pthread_t demo_thread;
 } g_threads;
 
 
@@ -322,7 +330,7 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-
+	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
 
 	pthread_exit(NULL);
 }
@@ -387,6 +395,11 @@ void ensure_frame_data() {
 		g_frame_data.frame_count = 0;
 		g_frame_data.has_next_frame = FALSE;
 		printf("frame_size1=%u\n", g_frame_data.frame_size);
+
+		// Init timestamps
+		gettimeofday(&g_frame_data.previous_frame_tv, NULL);
+		gettimeofday(&g_frame_data.current_frame_tv, NULL);
+		gettimeofday(&g_frame_data.next_frame_tv, NULL);
 	}
 	pthread_mutex_unlock(&g_frame_data.mutex);
 }
@@ -394,7 +407,7 @@ void ensure_frame_data() {
 /**
  * Set the next frame of data to the given 8-bit RGB buffer after rotating the buffers.
  */
-void set_next_frame_data(uint8_t* frame_data, uint32_t data_size) {
+void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_remote) {
 	rotate_frames();
 
 	pthread_mutex_lock(&g_frame_data.mutex);
@@ -408,6 +421,11 @@ void set_next_frame_data(uint8_t* frame_data, uint32_t data_size) {
 	// Update the timestamp & count
 	gettimeofday(&g_frame_data.next_frame_tv, NULL);
 	g_frame_data.frame_count ++;
+
+	// Update remote data timestamp if applicable
+	if (is_remote) {
+		gettimeofday(&g_frame_data.last_remote_data_tv, NULL);
+	}
 
 	g_frame_data.has_next_frame = (g_frame_data.frame_count > 2);
 
@@ -477,14 +495,13 @@ void* render_thread(void* unused_data)
 			continue;
 		}
 
-
 		// Calculate the time delta and current percentage (as a 16-bit value)
 		gettimeofday(&now_tv, NULL);
 		timersub(&now_tv, &g_frame_data.next_frame_tv, &frame_progress_tv);
 
 		// Calculate current frame and previous frame time
-		uint64_t frame_progress_us = frame_progress_tv.tv_sec*1000000 + frame_progress_tv.tv_usec;
-		uint64_t last_frame_time_us = g_frame_data.prev_current_delta_tv.tv_sec*1000000 + g_frame_data.prev_current_delta_tv.tv_usec;
+		uint64_t frame_progress_us = frame_progress_tv.tv_sec*1e6 + frame_progress_tv.tv_usec;
+		uint64_t last_frame_time_us = g_frame_data.prev_current_delta_tv.tv_sec*1e6 + g_frame_data.prev_current_delta_tv.tv_usec;
 
 		// Check for current frame exhaustion
 		if (frame_progress_us > last_frame_time_us) {
@@ -681,6 +698,139 @@ typedef enum
 	OPC_LEDSCAPE_CMD_GET_CONFIG = 1
 } opc_ledscape_cmd_id_t;
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Demo Data Thread
+//
+
+void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
+	/* convert hue, saturation and brightness ( HSB/HSV ) to RGB
+		 The dim_curve is used only on brightness/value and on saturation (inverted).
+		 This looks the most natural.
+	*/
+
+	int r;
+	int g;
+	int b;
+	int base;
+
+	if (sat == 0) { // Achromatic color (gray). Hue doesn't mind.
+		r = g = b = val;
+	} else  {
+		base = ((255 - sat) * val)>>8;
+
+		switch((hue%360)/60) {
+		case 0:
+				r = val;
+				g = (((val-base)*hue)/60)+base;
+				b = base;
+		break;
+
+		case 1:
+				r = (((val-base)*(60-(hue%60)))/60)+base;
+				g = val;
+				b = base;
+		break;
+
+		case 2:
+				r = base;
+				g = val;
+				b = (((val-base)*(hue%60))/60)+base;
+		break;
+
+		case 3:
+				r = base;
+				g = (((val-base)*(60-(hue%60)))/60)+base;
+				b = val;
+		break;
+
+		case 4:
+				r = (((val-base)*(hue%60))/60)+base;
+				g = base;
+				b = val;
+		break;
+
+		case 5:
+				r = val;
+				g = base;
+				b = (((val-base)*(60-(hue%60)))/60)+base;
+		break;
+		}
+
+		out[0] = r;
+		out[1] = g;
+		out[2] = b;
+	}
+}
+
+void* demo_thread(void* unused_data)
+{
+	unused_data=unused_data; // Suppress Warnings
+	fprintf(stderr, "Starting demo data thread\n", g_server_config.udp_port);
+
+	uint8_t* buffer = NULL;
+	uint32_t buffer_size = 0;
+
+	uint8_t rgb[3];
+
+	struct timeval now_tv, delta_tv;
+	uint8_t demo_enabled = FALSE;
+
+	for (uint16_t i = 0; /*ever*/; i++) {
+		// Calculate time since last remote data
+		pthread_mutex_lock(&g_frame_data.mutex);
+		gettimeofday(&now_tv, NULL);
+		timersub(&now_tv, &g_frame_data.last_remote_data_tv, &delta_tv);
+		pthread_mutex_unlock(&g_frame_data.mutex);
+
+		// Enable/disable demo mode and log
+		if (delta_tv.tv_sec > 5) {
+			if (! demo_enabled) {
+				printf("[demo] Enabling Demo Mode\n");
+			}
+
+			demo_enabled = TRUE;
+		} else {
+			if (demo_enabled) {
+				printf("[demo] Disabling Demo Mode\n");
+			}
+
+			demo_enabled = FALSE;
+		}
+
+		if (demo_enabled) {
+			// Demo mode
+			pthread_mutex_lock(&g_server_config.mutex);
+			uint32_t leds_per_strip = g_server_config.leds_per_strip;
+			uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_NUM_STRIPS;
+			pthread_mutex_unlock(&g_server_config.mutex);
+
+			if (buffer_size != channel_count) {
+				if (buffer != NULL) free(buffer);
+				buffer = malloc(buffer_size = channel_count);
+				memset(buffer, 0, buffer_size);
+			}
+
+			for (uint32_t strip = 0, data_index = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
+			{
+				for (uint16_t p = 0 ; p < leds_per_strip; p++, data_index+=3)
+				{
+					HSBtoRGB(
+						((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
+						200,
+						128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
+						&buffer[data_index]
+					);
+				}
+			}
+
+			set_next_frame_data(buffer, buffer_size, FALSE);
+		}
+
+		usleep(1e6 / 30);
+	}
+
+	pthread_exit(NULL);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // UDP Server
@@ -786,7 +936,7 @@ void* tcp_server_thread(void* unused_data)
 			}
 
 			if (cmd.command == 0) {
-				set_next_frame_data(buf, cmd_len);
+				set_next_frame_data(buf, cmd_len, TRUE);
 			} else if (cmd.command == 255) {
 				// System specific commands
 				const uint16_t system_id = buf[0] << 8 | buf[1];
