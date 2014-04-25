@@ -37,9 +37,15 @@ First, make sure that LEDscape compiles:
 Before LEDscape will function, you will need to replace the device tree
 file and reboot.
 
+	# Some distros (e.g. Arch) keep these files in /boot/dtbs instead.
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	reboot
+
+
+You will also need to have the uio_pruss module loaded.
+	
+	modprobe uio_pruss
 
 You can now test LEDscape, run the following to display a map of how
 the LEDscape strip ordering coreesponds to the GPIO pins on the BBB:
@@ -53,7 +59,7 @@ or other technique to bring the BBB's 3.3v signals up to 5v.
 
 Once everything is connected, run the `rgb-test` program:
 
-	sudo rgb-test
+	sudo ./rgb-test
 
 The LEDs should now be fading prettily. If not, go back and make
 sure everything is setup correctly.
