@@ -471,9 +471,9 @@ void* render_thread(void* unused_data)
 
 		// Skip frames if there isn't enough data
 		if (g_frame_data.frame_count < 3) {
-			usleep(2e6);
 			printf("[render] Awaiting sufficient data...\n");
 			pthread_mutex_unlock(&g_frame_data.mutex);
+			usleep(2e6);
 			continue;
 		}
 
