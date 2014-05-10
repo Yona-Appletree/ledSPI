@@ -9,10 +9,15 @@ void setup()
   opc = new OPC(this, "beaglebone.local", 7890);
 
   // Map an 16x16 grid of LEDs to the center of the window, scaled to take up most of the space
-  float spacing = height / 16.0;
-  opc.ledGrid16x16(0,   width * 1/4, height/2, spacing, 0, true);
-  opc.ledGrid16x16(256, width * 3/4, height/2, spacing, 0, true);
-
+  //float spacing = height / 16.0;
+  opc.ledGrid8x8(0 * 64, width * 1/8, height * 1/4, height/16, 0, true);
+  opc.ledGrid8x8(1 * 64, width * 3/8, height * 1/4, height/16, 0, true);
+  opc.ledGrid8x8(2 * 64, width * 5/8, height * 1/4, height/16, 0, true);
+  opc.ledGrid8x8(3 * 64, width * 7/8, height * 1/4, height/16, 0, true);
+  opc.ledGrid8x8(4 * 64, width * 1/8, height * 3/4, height/16, 0, true);
+  opc.ledGrid8x8(5 * 64, width * 3/8, height * 3/4, height/16, 0, true);
+  opc.ledGrid8x8(6 * 64, width * 5/8, height * 3/4, height/16, 0, true);
+  opc.ledGrid8x8(7 * 64, width * 7/8, height * 3/4, height/16, 0, true);
   colorMode(HSB, 100);
 }
 

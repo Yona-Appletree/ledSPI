@@ -25,7 +25,7 @@ void setup()
   colorMode(HSB, 100);
 }
 
-float noiseScale=0.02;
+float noiseScale=0.08;
 
 float fractalNoise(float x, float y, float z) {
   float r = 0;
