@@ -193,9 +193,10 @@ ledscape_init_with_modes(
 	switch (pru0_mode) {
 		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
 		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
+		case WS2801: pru0_program_filename = "./ws2801_0.bin"; break;
 		default:
 			warn("Invalid PRU0 Mode.");
-			exit(-1);
+			pru0_program_filename = "./ws281x_0.bin";
 	}
 	pru_exec(pru0, pru0_program_filename);
 
@@ -212,12 +213,12 @@ ledscape_init_with_modes(
 		case WS281x: pru1_program_filename = "./ws281x_1.bin"; break;
 		case DMX:
 			warn("PRU1 does not currently support DMX.");
-			exit(-1);
-			//pru1_program_filename = "./dmx_1.bin";
+			pru1_program_filename = "./ws281x_1.bin";
 		break;
+		case WS2801: pru1_program_filename = "./ws2801_1.bin"; break;
 		default:
+			pru1_program_filename = "./ws281x_1.bin";
 			warn("Invalid PRU1 Mode.");
-			exit(-1);
 	}
 	pru_exec(pru1, pru1_program_filename);
 
@@ -264,6 +265,7 @@ const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
 	switch (mode) {
 		case WS281x: return "WS281x";
 		case DMX: return "DMX";
+		case WS2801: return "WS2801";
 		default: return "unknown";
 	}
 }
@@ -271,5 +273,6 @@ const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
 const ledscape_output_mode_t ledscape_output_mode_from_string(const char* input) {
 	if (strcmp(input, "WS281x") == 0) return WS281x;
 	else if (strcmp(input, "DMX") == 0) return DMX;
+	else if (strcmp(input, "WS2801") == 0) return WS2801;
 	else return WS281x;
 }

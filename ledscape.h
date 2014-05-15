@@ -44,7 +44,8 @@ typedef struct {
 
 typedef enum {
 	WS281x = 0,
-	DMX = 1
+	DMX = 1,
+	WS2801 = 2
 } ledscape_output_mode_t;
 
 typedef struct ws281x_command ws281x_command_t;

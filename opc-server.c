@@ -67,6 +67,7 @@ static struct {
 	uint16_t tcp_port;
 	uint16_t udp_port;
 	uint16_t leds_per_strip;
+	uint16_t used_strip_count;
 
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
@@ -88,6 +89,7 @@ static struct {
 	.tcp_port = 7890,
 	.udp_port = 7890,
 	.leds_per_strip = 176,
+	.used_strip_count = LEDSCAPE_NUM_STRIPS,
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
@@ -173,6 +175,7 @@ static struct option long_options[] =
     {"tcp-port", optional_argument, NULL, 'p'},
     {"udp-port", optional_argument, NULL, 'P'},
     {"count", optional_argument, NULL, 'c'},
+    {"strip-count", optional_argument, NULL, 's'},
     {"dimensions", optional_argument, NULL, 'd'},
 
     {"no-interpolation", no_argument, NULL, 'i'},
@@ -195,7 +198,7 @@ int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:d:itlL:r:g:b:0:1:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:itlL:r:g:b:0:1:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -209,6 +212,10 @@ int main(int argc, char ** argv)
 
 		case 'c': {
 			g_server_config.leds_per_strip = atoi(optarg);
+		} break;
+
+		case 's': {
+			g_server_config.used_strip_count = atoi(optarg);
 		} break;
 
 		case 'd': {
@@ -285,7 +292,9 @@ int main(int argc, char ** argv)
 		"{\n"
 			"\t" "\"pru0Mode\": \"%s\"," "\n"
 			"\t" "\"pru1Mode\": \"%s\"," "\n"
+
 			"\t" "\"ledsPerStrip\": %d," "\n"
+			"\t" "\"usedStripCount\": %d," "\n"
 
 			"\t" "\"tcpPort\": %d," "\n"
 			"\t" "\"udpPort\": %d," "\n"
@@ -306,6 +315,7 @@ int main(int argc, char ** argv)
 		ledscape_output_mode_to_string(g_frame_data.leds->pru1_mode),
 
 		g_server_config.leds_per_strip,
+		g_server_config.used_strip_count,
 
 		g_server_config.tcp_port,
 		g_server_config.udp_port,
@@ -553,8 +563,12 @@ void* render_thread(void* unused_data)
 		struct timeval start_tv, stop_tv, delta_tv;
 		gettimeofday(&start_tv, NULL);
 
+		uint16_t used_strip_count;
+
 		// Check the server config for dithering and interpolation options
 		pthread_mutex_lock(&g_server_config.mutex);
+
+		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_NUM_STRIPS);
 
 		// Only enable dithering if we're better than 100fps
 		uint8_t dithering_enabled = (delta_avg < 10000) && g_server_config.dithering_enabled;
@@ -565,7 +579,7 @@ void* render_thread(void* unused_data)
 		// Only allow dithering to take effect if it blinks faster than 60fps
 		uint32_t maxDitherFrames = 16667 / delta_avg;
 
-		for (uint32_t strip_index=0; strip_index<LEDSCAPE_NUM_STRIPS; strip_index++) {
+		for (uint32_t strip_index=0; strip_index<used_strip_count; strip_index++) {
 			for (uint32_t led_index=0; led_index<leds_per_strip; led_index++, data_index++) {
 				buffer_pixel_t* pixel_in_prev = &g_frame_data.previous_frame_data[data_index];
 				buffer_pixel_t* pixel_in_current = &g_frame_data.current_frame_data[data_index];
