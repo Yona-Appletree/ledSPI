@@ -4,7 +4,7 @@ Overview
 LEDscape is a library for controlling 48 channels of WS2811-based LEDs from
 a single Beagle Bone Black. It makes use of the two Programmable Realtime Units (PRUs),
 each controlling 24 outputs. It can drive strings of 256 LEDs at around 60fps
-and 512 LEDs at 30 LEDs, enabling a single BBB to control 24,576 LEDs at once.
+and 512 LEDs at 30 30fps, enabling a single BBB to control 24,576 LEDs at once.
 
 The libary can be used directly from C or C++ or data can be sent using the
 Open Pixel Control protocol (http://openpixelcontrol.org) from a variety of
