@@ -10,9 +10,16 @@ The libary can be used directly from C or C++ or data can be sent using the
 Open Pixel Control protocol (http://openpixelcontrol.org) from a variety of
 sources (e.g. Processing, Java, Python, etc...)
 
-This version of the library has evolved significantly from it's original source
-and has been tailored for driving large quantities of WS2812 LEDs, as opposed to
-other types of LED panel.
+Background
+------
+LEDscape was originally written by Trammell Hudson (http://trmm.net/Category:LEDscape) for
+controlling WS2811-based LEDs. Since his original work, his version (https://github.com/osresearch/LEDscape)
+has been repurposed to drive a different type of LED panel (e.g. http://www.adafruit.com/products/420).
+
+This version of the library was forked from his original WS2811 work. Various
+improvements have been made in the attempt to make an accessible and powerful
+ws2811 driver based on the BBB. Many thanks to Trammell for his execellent work
+in scaffolding the BBB and PRUs for driving LEDs.
 
 
 WARNING
@@ -71,8 +78,8 @@ Setup
 -----
 
 Once you have LEDscape sending data to your pixels, you will probably
-want to use the `opc-rx` server which accepts Open Pixel Control data
-and passes it on to LEDscape. There is an angstrom-compatible service
+want to use the `opc-server` server which accepts Open Pixel Control data
+and passes it on to LEDscape. There is an systemd service
 checked in, which can be installed like so:
 
 	sudo systemctl enable /path/to/LEDscape/ledscape.service
@@ -92,10 +99,27 @@ editing the parameters to opc-rx.
 Data Format
 -----------
 
-The `opc-rx` server accepts data on OPC channel 0. It expects the data for
+The `opc-server` server accepts data on OPC channel 0. It expects the data for
 each LED strip concatonated together. This is done because LEDscape requires
 that data for all strips be present at once before flushing data data out to
 the LEDs. 
+
+Features and Options
+--------------------
+
+`opc-server` supports Fadecandy-inspired temporal dithering and interpolation
+to enhance the smoothness of the output data. By default, it will apply a
+luminance curve, interpolate and dither input data at the highest framerate
+possible with the given number of LEDs.
+
+These options can be configured by command-line swithes that are lightly
+documented by `opc-server -h`. The most common setup will be:
+
+	./opc-server --count LED_COUNT --strip-count STRIP_COUNT
+	
+Note that future versions of `opc-server` will make use of a JSON configuration
+and the current flags will be deprecated or removed.
+
 
 
 Processing Example
