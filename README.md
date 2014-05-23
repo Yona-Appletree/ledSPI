@@ -33,7 +33,7 @@ there are +5V signals involved.
 
 
 Installation and Usage
-========
+======================
 
 To use LEDscape, download it to your BeagleBone Black.
 
@@ -44,13 +44,19 @@ First, make sure that LEDscape compiles:
 Before LEDscape will function, you will need to replace the device tree
 file and reboot.
 
-	# Some distros (e.g. Arch) keep these files in /boot/dtbs instead.
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	reboot
 
+Locating the am335x-boneblack.dtb file:
 
-You will also need to have the uio_pruss module loaded.
+* Older BBB have the file in /boot;
+* Some distros (e.g. Arch) keep these files in /boot/dtbs;
+* The Debian distribution keeps the file in /boot/uboot/dtbs (when mounted
+  over USB, the /boot/uboot directory is read-only from the BBB and you
+  need to do the file operations from the host system.
+
+You will also need to have the uio\_pruss module loaded.
 	
 	modprobe uio_pruss
 
