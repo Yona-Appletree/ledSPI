@@ -92,7 +92,7 @@ extern void
 ledscape_set_color(
 	ledscape_frame_t * const frame,
 	uint8_t strip,
-	uint8_t pixel,
+	uint16_t pixel,
 	uint8_t r,
 	uint8_t g,
 	uint8_t b
