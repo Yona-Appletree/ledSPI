@@ -194,6 +194,7 @@ ledscape_init_with_modes(
 		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
 		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
 		case WS2801: pru0_program_filename = "./ws2801_0.bin"; break;
+		case WS2801_NEWPINS: pru0_program_filename = "./ws2801_newpins_0.bin"; break;
 		default:
 			warn("Invalid PRU0 Mode.");
 			pru0_program_filename = "./ws281x_0.bin";
@@ -216,6 +217,7 @@ ledscape_init_with_modes(
 			pru1_program_filename = "./ws281x_1.bin";
 		break;
 		case WS2801: pru1_program_filename = "./ws2801_1.bin"; break;
+		case WS2801_NEWPINS: pru1_program_filename = "./ws2801_newpins_1.bin"; break;
 		default:
 			pru1_program_filename = "./ws281x_1.bin";
 			warn("Invalid PRU1 Mode.");
