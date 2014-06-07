@@ -11,94 +11,115 @@
 
 #include "ws281x.hp"
 
+#define NOP       mov r0, r0
+
+/*
+First 24 pins in new layoutfrom pinmap.js
+00: gpio0_bit0 11
+01: gpio2_bit0 25
+02: gpio2_bit1  1
+03: gpio1_bit0 14
+04: gpio0_bit1 26
+05: gpio1_bit1 12
+06: gpio2_bit2 4
+07: gpio2_bit3 3
+08: gpio2_bit4 6
+09: gpio2_bit5 7
+10: gpio2_bit5 9
+11: gpio2_bit6  11
+12: gpio2_bit7 13
+13: gpio2_bit8 15
+14: gpio2_bit9 16
+15: gpio2_bit10 17
+16: gpio2_bit11 23
+17: gpio0_bit2 10
+18: gpio0_bit3 9
+19: gpio0_bit4 8
+20: gpio2_bit12 14
+21: gpio2_bit13 12
+22: gpio2_bit14 10
+23: gpio2_bit15 8
+*/
 
 //===============================
 // GPIO Pin Mapping
 
-// Pins in GPIO2
-#define gpio2_bit0 1
-#define gpio2_bit1 2
-#define gpio2_bit2 3
-#define gpio2_bit3 4
-#define gpio2_bit4 5
-#define gpio2_bit5 6
-#define gpio2_bit6 7
-#define gpio2_bit7 8
-#define gpio2_bit8 9
-#define gpio2_bit9 10
-#define gpio2_bit10 11
-#define gpio2_bit11 12
-#define gpio2_bit12 13
-#define gpio2_bit13 14
-#define gpio2_bit14 15
-#define gpio2_bit15 16
+// Clock and data pins in the order they should be taken from the data. The pins are interleaved, but separated here
+// for clarity.
 
-#define gpio2_bit16 17
-#define gpio2_bit17 22
-#define gpio2_bit18 23
-// #define gpio2_bit19 24 // BROKEN
-#define gpio2_bit19 25
+#define gpio0_bit0 11  // DATA
+// First CLOCK...
+#define gpio2_bit1  1  // DATA
+#define gpio0_bit1 26  // DATA
+#define gpio2_bit2 4   // DATA
+#define gpio2_bit4 6   // DATA
+#define gpio2_bit5 9   // DATA
+#define gpio2_bit7 13  // DATA
+#define gpio2_bit9 16  // DATA
+#define gpio2_bit11 23 // DATA
+#define gpio0_bit3 9   // DATA
+#define gpio2_bit12 14 // DATA
+#define gpio2_bit14 10 // DATA
+// Last CLOCK....
 
-// Pins in GPIO3
-#define gpio3_bit0 14
-#define gpio3_bit1 15
-#define gpio3_bit2 16
-#define gpio3_bit3 17
-#define gpio3_bit4 19
-#define gpio3_bit5 21
+// First Data
+#define gpio2_bit0 25  // CLOCK
+#define gpio1_bit0 14  // CLOCK
+#define gpio1_bit1 12  // CLOCK
+#define gpio2_bit3 3   // CLOCK
+#define gpio2_bit5 7   // CLOCK
+#define gpio2_bit6  11 // CLOCK
+#define gpio2_bit8 15  // CLOCK
+#define gpio2_bit10 17 // CLOCK
+#define gpio0_bit2 10  // CLOCK
+#define gpio0_bit4 8   // CLOCK
+#define gpio2_bit13 12 // CLOCK
+// Last Data
+#define gpio2_bit15 8  // CLOCK
 
-
-#define GPIO2_LED_MASK  0x3c3fffe
-// (0\
-// |(1<<gpio2_bit0)\
-// |(1<<gpio2_bit1)\
-// |(1<<gpio2_bit2)\
-// |(1<<gpio2_bit3)\
-// |(1<<gpio2_bit4)\
-// |(1<<gpio2_bit5)\
-// |(1<<gpio2_bit6)\
-// |(1<<gpio2_bit7)\
-// |(1<<gpio2_bit8)\
-// |(1<<gpio2_bit9)\
-// |(1<<gpio2_bit10)\
-// |(1<<gpio2_bit11)\
-// |(1<<gpio2_bit12)\
-// |(1<<gpio2_bit13)\
-// |(1<<gpio2_bit14)\
-// |(1<<gpio2_bit15)\
-// |(1<<gpio2_bit16)\
-// |(1<<gpio2_bit17)\
-// |(1<<gpio2_bit18)\
-// |(1<<gpio2_bit19)\
-// |(1<<gpio2_bit20)\
-// )
-
-#define GPIO3_LED_MASK (0\
-|(1<<gpio3_bit0)\
-|(1<<gpio3_bit1)\
-|(1<<gpio3_bit2)\
-|(1<<gpio3_bit3)\
+#define GPIO0_DATA_MASK (0\
+|(1<<gpio0_bit0)\
+|(1<<gpio0_bit1)\
+|(1<<gpio0_bit3)\
 )
-//|(1<<gpio3_bit4)\
-//|(1<<gpio3_bit5)\
+
+#define GPIO1_DATA_MASK (0)
+
+#define GPIO2_DATA_MASK (0\
+|(1<<gpio2_bit1)\
+|(1<<gpio2_bit2)\
+|(1<<gpio2_bit4)\
+|(1<<gpio2_bit5)\
+|(1<<gpio2_bit7)\
+|(1<<gpio2_bit9)\
+|(1<<gpio2_bit11)\
+|(1<<gpio2_bit12)\
+|(1<<gpio2_bit14)\
+)
+
+
+
+#define GPIO0_CLOCK_MASK (0\
+|(1<<gpio0_bit2)\
+|(1<<gpio0_bit4)\
+)
+
+#define GPIO1_CLOCK_MASK (0\
+|(1<<gpio1_bit0)\
+|(1<<gpio1_bit1)\
+)
 
 #define GPIO2_CLOCK_MASK (0\
 |(1<<gpio2_bit0)\
-|(1<<gpio2_bit2)\
-|(1<<gpio2_bit4)\
+|(1<<gpio2_bit3)\
+|(1<<gpio2_bit5)\
 |(1<<gpio2_bit6)\
 |(1<<gpio2_bit8)\
 |(1<<gpio2_bit10)\
-|(1<<gpio2_bit12)\
-|(1<<gpio2_bit14)\
-|(1<<gpio2_bit16)\
-|(1<<gpio2_bit18)\
+|(1<<gpio2_bit13)\
+|(1<<gpio2_bit15)\
 )
 
-#define GPIO3_CLOCK_MASK (0\
-|(1<<gpio3_bit0)\
-|(1<<gpio3_bit2)\
-)
 
 /** Register map */
 #define data_addr r0
@@ -136,7 +157,7 @@ lab:
 /** Wait for the cycle counter to reach a given value */
 .macro WAITNS
 .mparam ns,lab
-    MOV r8, 0x24000 // control register
+    MOV r8, 0x22000 // control register
 lab:
 	LBBO r9, r8, 0xC, 4 // read the cycle counter
 //	SUB r9, r9, sleep_counter 
@@ -150,7 +171,7 @@ lab:
 /** Reset the cycle counter */
 .macro RESET_COUNTER
 		// Disable the counter and clear it, then re-enable it
-		MOV addr_reg, 0x24000 // control register
+		MOV addr_reg, 0x22000 // control register
 		LBBO r9, addr_reg, 0, 4
 		CLR r9, r9, 3 // disable counter bit
 		SBBO r9, addr_reg, 0, 4 // write it back
@@ -229,7 +250,7 @@ WORD_LOOP:
 		SUB bit_num, bit_num, 1
 		/** Macro to generate the mask of which bits are zero.
 		 * For each of these registers, set the
-		 * corresponding bit in the gpio0_ones register if
+		 * corresponding bit in the gpio0_one register if
 		 * the current bit is set in the strided register.
 		 */
 		#define TEST_BIT(regN,gpioN,bitN) \
@@ -239,74 +260,84 @@ WORD_LOOP:
 
 		///////////////////////////////////////////////////////////////////////
 		// Load 12 registers of data into r10-r21
-		LBBO r10, r0, 12*4, 12*4
-		MOV gpio2_ones, 0
-		TEST_BIT(r10, gpio2, bit1)
-		TEST_BIT(r11, gpio2, bit3)
-		TEST_BIT(r12, gpio2, bit5)
-		TEST_BIT(r13, gpio2, bit7)
-		TEST_BIT(r14, gpio2, bit9)
-		TEST_BIT(r15, gpio2, bit11)
-		TEST_BIT(r16, gpio2, bit13)
-		TEST_BIT(r17, gpio2, bit15)
-		TEST_BIT(r18, gpio2, bit17)
-		TEST_BIT(r19, gpio2, bit19)
 
-		MOV gpio3_ones, 0
-		TEST_BIT(r20, gpio3, bit1)
-		TEST_BIT(r21, gpio3, bit3)
+		LBBO r10, r0, 0, 12*4
+		MOV gpio0_ones, 0
+		MOV gpio2_ones, 0
+
+		TEST_BIT(r10, gpio0, bit0)      // Bit 0
+		TEST_BIT(r11, gpio2, bit1)      // Bit 1
+		TEST_BIT(r12, gpio0, bit1)      // Bit 2
+		TEST_BIT(r13, gpio2, bit2)      // Bit 3
+		TEST_BIT(r14, gpio2, bit4)      // Bit 4
+		TEST_BIT(r15, gpio2, bit5)      // Bit 5
+		TEST_BIT(r16, gpio2, bit7)      // Bit 6
+		TEST_BIT(r17, gpio2, bit9)      // Bit 7
+		TEST_BIT(r18, gpio2, bit11)     // Bit 8
+		TEST_BIT(r19, gpio0, bit3)      // Bit 9
+		TEST_BIT(r20, gpio2, bit12)     // Bit 10
+		TEST_BIT(r21, gpio2, bit14)     // Bit 11
 
 		// Data loaded
 		///////////////////////////////////////////////////////////////////////
+
 
 		///////////////////////////////////////////////////////////////////////
 		// Send the bits
 
 		// Everything LOW
-		MOV r22, GPIO2 | GPIO_CLEARDATAOUT
-		MOV r23, GPIO3 | GPIO_CLEARDATAOUT
+		MOV r23, GPIO0 | GPIO_CLEARDATAOUT
+		MOV r24, GPIO1 | GPIO_CLEARDATAOUT
+		MOV r25, GPIO2 | GPIO_CLEARDATAOUT
 
-		MOV r20, GPIO2_LED_MASK
-		MOV r21, GPIO3_LED_MASK
-		SBBO r20, r22, 0, 4
-		SBBO r21, r23, 0, 4
+		MOV r20, GPIO0_DATA_MASK
+		MOV r21, GPIO1_DATA_MASK
+		MOV r22, GPIO2_DATA_MASK
+
+		SBBO r20, r23, 0, 4
+		SBBO r21, r24, 0, 4
+		SBBO r22, r25, 0, 4
 
 		// Data 1s HIGH
-		MOV r22, GPIO2 | GPIO_SETDATAOUT
-		MOV r23, GPIO3 | GPIO_SETDATAOUT
-		SBBO gpio2_ones, r22, 0, 4
-		SBBO gpio3_ones, r23, 0, 4
+		MOV r23, GPIO0 | GPIO_SETDATAOUT
+		MOV r24, GPIO1 | GPIO_SETDATAOUT
+		MOV r25, GPIO2 | GPIO_SETDATAOUT
+		SBBO gpio0_ones, r23, 0, 4
+		SBBO gpio2_ones, r25, 0, 4
 
-		WAITNS 10, wait_load_time
+		// Wait for a moment before raising the clocks
+		NOP
 
 		// Clocks HIGH
-		MOV r20, GPIO2_CLOCK_MASK
-		MOV r21, GPIO3_CLOCK_MASK
-		SBBO r20, r22, 0, 4
-		SBBO r21, r23, 0, 4
+		MOV r20, GPIO0_CLOCK_MASK
+		MOV r21, GPIO1_CLOCK_MASK
+		MOV r22, GPIO2_CLOCK_MASK
+		SBBO r20, r23, 0, 4
+		SBBO r21, r24, 0, 4
+		SBBO r22, r25, 0, 4
 
 		// Bits sent
 		///////////////////////////////////////////////////////////////////////
 
+		// We're done.
 		QBNE BIT_LOOP, bit_num, 0
 
-	// The 32 RGB streams have been clocked out
+	// The RGB streams have been clocked out
 	// Move to the next pixel on each row
 	ADD data_addr, data_addr, 48 * 4
 	SUB data_len, data_len, 1
 	QBNE WORD_LOOP, data_len, #0
 
-	// Clear the 1 bits from the final frame 
-	MOV r22, GPIO2_LED_MASK
-	MOV r23, GPIO3_LED_MASK
-	MOV r12, GPIO2 | GPIO_CLEARDATAOUT
-	MOV r13, GPIO3 | GPIO_CLEARDATAOUT
+	// Final clear for the word
+	MOV r20, GPIO0_DATA_MASK
+	MOV r21, GPIO1_DATA_MASK
+	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
+	MOV r11, GPIO1 | GPIO_CLEARDATAOUT
 
-	WAITNS 1000, end_of_frame_clear_wait
-	SBBO r23, r13, 0, 4
-	SBBO r22, r12, 0, 4
+	SBBO r20, r10, 0, 4
+	SBBO r21, r11, 0, 4
 
-    // Delay at least 50 usec; this is the required reset
+    // Delay at least 500 usec; this is the required reset
     // time for the LED strip to update with the new pixels.
     SLEEPNS 1000000, 1, reset_time
 
@@ -314,7 +345,7 @@ WORD_LOOP:
     // Store a non-zero response in the buffer so that they know that we are done
     // aso a quick hack, we write the counter so that we know how
     // long it took to write out.
-    MOV r8, 0x24000 // control register
+    MOV r8, 0x22000 // control register
     LBBO r2, r8, 0xC, 4
     SBCO r2, CONST_PRUDRAM, 12, 4
 
@@ -328,9 +359,9 @@ EXIT:
 
 #ifdef AM33XX
     // Send notification to Host for program completion
-    MOV R31.b0, PRU1_ARM_INTERRUPT+16
+    MOV R31.b0, PRU0_ARM_INTERRUPT+16
 #else
-    MOV R31.b0, PRU1_ARM_INTERRUPT
+    MOV R31.b0, PRU0_ARM_INTERRUPT
 #endif
 
     HALT

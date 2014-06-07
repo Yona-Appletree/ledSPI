@@ -21,6 +21,7 @@
 #include "ledscape.h"
 
 #include "lib/cesanta/net_skeleton.h"
+#include "lib/cesanta/frozen.h"
 
 #include <pthread.h>
 
@@ -279,13 +280,65 @@ int main(int argc, char ** argv)
 		die("[main] %u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
 	}
 
+	fprintf(stderr,
+		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
+		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+	);
+	fprintf(stderr, g_server_config.json);
+
+	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
+	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
+	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
+	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+
+	setup_server();
+
+	pthread_exit(NULL);
+}
+
+void teardown_server() {
+	printf("Tearing down server...\n");
+
+	pthread_mutex_lock(&g_frame_data.mutex);
+	pthread_mutex_lock(&g_server_config.mutex);
+
+	if (g_frame_data.leds) {
+		ledscape_close(g_frame_data.leds);
+		g_frame_data.leds = NULL;
+	}
+
+	pthread_mutex_unlock(&g_server_config.mutex);
+	pthread_mutex_unlock(&g_frame_data.mutex);
+
+	printf("Teardown Complete.\n");
+}
+
+void start_server() {
+	printf("Starting server...");
+
+	// Ensure we're not over the pixel limit
+	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
+		fprint(stderr, "%u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
+		return;
+	}
+
+	// Setup tables
+	build_lookup_tables();
+	ensure_frame_data();
+
 	// Init LEDscape
 	g_frame_data.leds = ledscape_init_with_modes(
 		g_server_config.leds_per_strip,
 		g_server_config.pru0_mode,
 		g_server_config.pru1_mode
 	);
+}
 
+void load_config_file() {
+
+}
+
+void save_config_file() {
 	// Build config JSON
 	sprintf(
 		g_server_config.json,
@@ -329,22 +382,6 @@ int main(int argc, char ** argv)
 		(double)g_server_config.white_point.green,
 		(double)g_server_config.white_point.blue
 	);
-
-	fprintf(stderr,
-		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
-		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
-	);
-	fprintf(stderr, g_server_config.json);
-
-	build_lookup_tables();
-	ensure_frame_data();
-
-	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
-	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
-	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
-
-	pthread_exit(NULL);
 }
 
 void build_lookup_tables() {
@@ -507,6 +544,14 @@ void* render_thread(void* unused_data)
 			continue;
 		}
 
+		// Skip frames if LEDscape isn't initialized
+		if (g_frame_data.leds == NULL) {
+			printf("[render] Awaiting server initialization...\n");
+			pthread_mutex_unlock(&g_frame_data.mutex);
+			usleep(2e6);
+			continue;
+		}
+
 		// Calculate the time delta and current percentage (as a 16-bit value)
 		gettimeofday(&now_tv, NULL);
 		timersub(&now_tv, &g_frame_data.next_frame_tv, &frame_progress_tv);
@@ -568,6 +613,7 @@ void* render_thread(void* unused_data)
 		// Check the server config for dithering and interpolation options
 		pthread_mutex_lock(&g_server_config.mutex);
 
+		// Use the strip count from configs. This can save time that would be used dithering
 		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_NUM_STRIPS);
 
 		// Only enable dithering if we're better than 100fps

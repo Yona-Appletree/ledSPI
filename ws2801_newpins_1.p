@@ -5,99 +5,124 @@
  //* conjunction with another similar program on PRU1.
  //*/
 
-
 .origin 0
 .entrypoint START
 
 #include "ws281x.hp"
 
+#define NOP       mov r0, r0
+
+/*
+Second 24 pins in new layout from pinmap.js
+24: gpio2_bit0 2
+25: gpio2_bit1 5
+26: gpio1_bit0 13
+27: gpio0_bit0 23
+28: gpio1_bit1 15
+29: gpio0_bit1 27
+30: gpio0_bit2 22
+31: gpio2_bit2 22
+32: gpio1_bit2 17
+33: gpio0_bit3 14
+34: gpio3_bit0 17
+35: gpio3_bit1 15
+36: gpio3_bit2 16
+37: gpio3_bit3 14
+38: gpio0_bit4 20
+39: gpio0_bit5 7
+40: gpio0_bit6 30
+41: gpio1_bit3 28
+42: gpio0_bit7 31
+43: gpio1_bit4 18
+44: gpio1_bit5 16
+45: gpio1_bit6 19
+46: gpio0_bit8 3
+47: gpio0_bit9 2
+*/
 
 //===============================
 // GPIO Pin Mapping
 
-// Pins in GPIO2
-#define gpio2_bit0 1
-#define gpio2_bit1 2
-#define gpio2_bit2 3
-#define gpio2_bit3 4
-#define gpio2_bit4 5
-#define gpio2_bit5 6
-#define gpio2_bit6 7
-#define gpio2_bit7 8
-#define gpio2_bit8 9
-#define gpio2_bit9 10
-#define gpio2_bit10 11
-#define gpio2_bit11 12
-#define gpio2_bit12 13
-#define gpio2_bit13 14
-#define gpio2_bit14 15
-#define gpio2_bit15 16
+// Clock and data pins in the order they should be taken from the data. The pins are interleaved, but separated here
+// for clarity.
 
-#define gpio2_bit16 17
-#define gpio2_bit17 22
-#define gpio2_bit18 23
-// #define gpio2_bit19 24 // BROKEN
-#define gpio2_bit19 25
+#define gpio2_bit0 2  // DATA
+#define gpio1_bit0 13 // DATA
+#define gpio1_bit1 15 // DATA
+#define gpio0_bit2 22 // DATA
+#define gpio1_bit2 17 // DATA
+#define gpio3_bit0 17 // DATA
+#define gpio3_bit2 16 // DATA
+#define gpio0_bit4 20 // DATA
+#define gpio0_bit6 30 // DATA
+#define gpio0_bit7 31 // DATA
+#define gpio1_bit5 16 // DATA
+#define gpio0_bit8 3  // DATA
 
-// Pins in GPIO3
-#define gpio3_bit0 14
-#define gpio3_bit1 15
-#define gpio3_bit2 16
-#define gpio3_bit3 17
-#define gpio3_bit4 19
-#define gpio3_bit5 21
+#define gpio2_bit1 5  // CLOCK
+#define gpio0_bit0 23 // CLOCK
+#define gpio0_bit1 27 // CLOCK
+#define gpio2_bit2 22 // CLOCK
+#define gpio0_bit3 14 // CLOCK
+#define gpio3_bit1 15 // CLOCK
+#define gpio3_bit3 14 // CLOCK
+#define gpio0_bit5 7  // CLOCK
+#define gpio1_bit3 28 // CLOCK
+#define gpio1_bit4 18 // CLOCK
+#define gpio1_bit6 19 // CLOCK
+#define gpio0_bit9 2  // CLOCK
 
-
-#define GPIO2_LED_MASK  0x3c3fffe
-// (0\
-// |(1<<gpio2_bit0)\
-// |(1<<gpio2_bit1)\
-// |(1<<gpio2_bit2)\
-// |(1<<gpio2_bit3)\
-// |(1<<gpio2_bit4)\
-// |(1<<gpio2_bit5)\
-// |(1<<gpio2_bit6)\
-// |(1<<gpio2_bit7)\
-// |(1<<gpio2_bit8)\
-// |(1<<gpio2_bit9)\
-// |(1<<gpio2_bit10)\
-// |(1<<gpio2_bit11)\
-// |(1<<gpio2_bit12)\
-// |(1<<gpio2_bit13)\
-// |(1<<gpio2_bit14)\
-// |(1<<gpio2_bit15)\
-// |(1<<gpio2_bit16)\
-// |(1<<gpio2_bit17)\
-// |(1<<gpio2_bit18)\
-// |(1<<gpio2_bit19)\
-// |(1<<gpio2_bit20)\
-// )
-
-#define GPIO3_LED_MASK (0\
-|(1<<gpio3_bit0)\
-|(1<<gpio3_bit1)\
-|(1<<gpio3_bit2)\
-|(1<<gpio3_bit3)\
+/////////////////////////////////////
+// DATA Pins
+#define GPIO0_DATA_MASK (0\
+ |(1<<gpio0_bit2)\
+ |(1<<gpio0_bit4)\
+ |(1<<gpio0_bit6)\
+ |(1<<gpio0_bit6)\
+ |(1<<gpio0_bit7)\
 )
-//|(1<<gpio3_bit4)\
-//|(1<<gpio3_bit5)\
+
+#define GPIO1_DATA_MASK (0\
+ |(1<<gpio1_bit0)\
+ |(1<<gpio1_bit1)\
+ |(1<<gpio1_bit2)\
+ |(1<<gpio1_bit5)\
+)
+
+#define GPIO2_DATA_MASK (0\
+ |(1<<gpio2_bit0)\
+)
+
+#define GPIO3_DATA_MASK (0\
+ |(1<<gpio3_bit0)\
+ |(1<<gpio3_bit2)\
+)
+
+
+/////////////////////////////////////
+// CLOCK Pins
+#define GPIO0_CLOCK_MASK (0\
+|(1<<gpio0_bit0)\
+|(1<<gpio0_bit1)\
+|(1<<gpio0_bit3)\
+|(1<<gpio0_bit5)\
+|(1<<gpio0_bit8)\
+)
+
+#define GPIO1_CLOCK_MASK (0\
+|(1<<gpio1_bit3)\
+|(1<<gpio1_bit4)\
+|(1<<gpio1_bit6)\
+)
 
 #define GPIO2_CLOCK_MASK (0\
-|(1<<gpio2_bit0)\
+|(1<<gpio2_bit1)\
 |(1<<gpio2_bit2)\
-|(1<<gpio2_bit4)\
-|(1<<gpio2_bit6)\
-|(1<<gpio2_bit8)\
-|(1<<gpio2_bit10)\
-|(1<<gpio2_bit12)\
-|(1<<gpio2_bit14)\
-|(1<<gpio2_bit16)\
-|(1<<gpio2_bit18)\
 )
 
 #define GPIO3_CLOCK_MASK (0\
-|(1<<gpio3_bit0)\
-|(1<<gpio3_bit2)\
+|(1<<gpio3_bit1)\
+|(1<<gpio3_bit3)\
 )
 
 /** Register map */
@@ -240,21 +265,23 @@ WORD_LOOP:
 		///////////////////////////////////////////////////////////////////////
 		// Load 12 registers of data into r10-r21
 		LBBO r10, r0, 12*4, 12*4
+		MOV gpio0_ones, 0
+		MOV gpio1_ones, 0
 		MOV gpio2_ones, 0
-		TEST_BIT(r10, gpio2, bit1)
-		TEST_BIT(r11, gpio2, bit3)
-		TEST_BIT(r12, gpio2, bit5)
-		TEST_BIT(r13, gpio2, bit7)
-		TEST_BIT(r14, gpio2, bit9)
-		TEST_BIT(r15, gpio2, bit11)
-		TEST_BIT(r16, gpio2, bit13)
-		TEST_BIT(r17, gpio2, bit15)
-		TEST_BIT(r18, gpio2, bit17)
-		TEST_BIT(r19, gpio2, bit19)
-
 		MOV gpio3_ones, 0
-		TEST_BIT(r20, gpio3, bit1)
-		TEST_BIT(r21, gpio3, bit3)
+
+		TEST_BIT(r10, gpio2, bit0)
+		TEST_BIT(r11, gpio1, bit0)
+		TEST_BIT(r12, gpio1, bit1)
+		TEST_BIT(r13, gpio0, bit2)
+		TEST_BIT(r14, gpio1, bit2)
+		TEST_BIT(r15, gpio3, bit0)
+		TEST_BIT(r16, gpio3, bit2)
+		TEST_BIT(r17, gpio0, bit4)
+		TEST_BIT(r18, gpio0, bit6)
+		TEST_BIT(r19, gpio0, bit7)
+		TEST_BIT(r20, gpio1, bit5)
+		TEST_BIT(r21, gpio0, bit8)
 
 		// Data loaded
 		///////////////////////////////////////////////////////////////////////
@@ -263,27 +290,41 @@ WORD_LOOP:
 		// Send the bits
 
 		// Everything LOW
-		MOV r22, GPIO2 | GPIO_CLEARDATAOUT
-		MOV r23, GPIO3 | GPIO_CLEARDATAOUT
+		MOV r24, GPIO0 | GPIO_CLEARDATAOUT
+		MOV r25, GPIO1 | GPIO_CLEARDATAOUT
+		MOV r26, GPIO2 | GPIO_CLEARDATAOUT
+		MOV r27, GPIO3 | GPIO_CLEARDATAOUT
 
-		MOV r20, GPIO2_LED_MASK
-		MOV r21, GPIO3_LED_MASK
-		SBBO r20, r22, 0, 4
-		SBBO r21, r23, 0, 4
+		MOV r20, GPIO0_DATA_MASK
+		MOV r21, GPIO1_DATA_MASK
+		MOV r22, GPIO2_DATA_MASK
+		MOV r23, GPIO3_DATA_MASK
+		SBBO r20, r24, 0, 4
+		SBBO r21, r25, 0, 4
+		SBBO r22, r26, 0, 4
+		SBBO r23, r27, 0, 4
 
 		// Data 1s HIGH
-		MOV r22, GPIO2 | GPIO_SETDATAOUT
-		MOV r23, GPIO3 | GPIO_SETDATAOUT
-		SBBO gpio2_ones, r22, 0, 4
-		SBBO gpio3_ones, r23, 0, 4
+		MOV r24, GPIO0 | GPIO_SETDATAOUT
+		MOV r25, GPIO1 | GPIO_SETDATAOUT
+		MOV r26, GPIO2 | GPIO_SETDATAOUT
+		MOV r27, GPIO3 | GPIO_SETDATAOUT
+		SBBO gpio0_ones, r24, 0, 4
+		SBBO gpio1_ones, r25, 0, 4
+		SBBO gpio2_ones, r26, 0, 4
+		SBBO gpio3_ones, r27, 0, 4
 
-		WAITNS 10, wait_load_time
+		NOP
 
 		// Clocks HIGH
-		MOV r20, GPIO2_CLOCK_MASK
-		MOV r21, GPIO3_CLOCK_MASK
-		SBBO r20, r22, 0, 4
-		SBBO r21, r23, 0, 4
+		MOV r20, GPIO0_CLOCK_MASK
+		MOV r21, GPIO1_CLOCK_MASK
+		MOV r22, GPIO2_CLOCK_MASK
+		MOV r23, GPIO3_CLOCK_MASK
+		SBBO r20, r24, 0, 4
+		SBBO r21, r25, 0, 4
+		SBBO r22, r26, 0, 4
+		SBBO r23, r27, 0, 4
 
 		// Bits sent
 		///////////////////////////////////////////////////////////////////////
@@ -297,8 +338,8 @@ WORD_LOOP:
 	QBNE WORD_LOOP, data_len, #0
 
 	// Clear the 1 bits from the final frame 
-	MOV r22, GPIO2_LED_MASK
-	MOV r23, GPIO3_LED_MASK
+	MOV r22, GPIO2_DATA_MASK
+	MOV r23, GPIO3_DATA_MASK
 	MOV r12, GPIO2 | GPIO_CLEARDATAOUT
 	MOV r13, GPIO3 | GPIO_CLEARDATAOUT
 

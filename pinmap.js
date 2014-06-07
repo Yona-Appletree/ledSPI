@@ -96,6 +96,7 @@ var pinData = [
 var pinsByHeaderAndPin = {9:[], 8: []};
 var pinsByGpioNum = {9:[], 8: []};
 var pinsByGpioBankAndBit = {};
+var pinsByPruChannel = {};
 
 pinData.forEach(function(d){
 	d.gpioBank = parseInt(d.gpioNum / 32);
@@ -121,10 +122,75 @@ var totalUsedPinCount = 0;
 bitsUsedByBank.forEach(function(usedInBank, bankNum){
 	usedInBank.forEach(function(bitNum){
 		totalUsedPinCount ++;
+
+		pinsByPruChannel[channelIndex] = pinsByGpioBankAndBit[bankNum][bitNum];
+
 		pinsByGpioBankAndBit[bankNum][bitNum].used = true;
 		pinsByGpioBankAndBit[bankNum][bitNum].channelIndex = channelIndex++;
 	});
-})
+});
+
+var newToOldMapping = {
+	"40": 13,
+	"42": 14,
+	"44": 19,
+	"46": 1,
+	"32": 20,
+	"35": 45,
+	"37": 44,
+	"38": 8,
+
+	"41": 23,
+	"43": 21,
+	"45": 22,
+	"47": 0,
+	"33": 7,
+	"34": 47,
+	"36": 46,
+	"39": 2,
+
+	"24": 25,
+	"25": 28,
+	"26": 16,
+	"27": 10,
+	"28": 18,
+	"29": 12,
+	"30": 9,
+	"31": 41,
+	"16": 42,
+	"17": 5,
+	"18": 4,
+	"19": 3,
+	"20": 37,
+	"21": 35,
+	"22": 33,
+	"23": 31,
+	"8": 29,
+
+	"7": 26,
+	"6": 27,
+	"5": 15,
+	"4": 11,
+	"3": 17,
+	"2": 24,
+	"1": 43,
+	"0": 6,
+	"15": 40,
+	"14": 39,
+	"13": 38,
+	"12": 36,
+	"11": 34,
+	"10": 32,
+	"9": 30
+};
+
+console.info("");
+console.info("New layout GPIO mapping:");
+for (var i = 0; i<totalUsedPinCount; i++) {
+	pinsByPruChannel[newToOldMapping[i]].newChannelIndex = i;
+	console.info(i + ": " + pinsByPruChannel[newToOldMapping[i]].gpioName);
+}
+console.info("");
 
 var p8verified = [ // p8
 	0,  0, // 1
@@ -181,7 +247,6 @@ var p9verified = [ // P9
 var totalVerifiedCount = 0;
 p8verified.forEach(function(verified, i){pinsByHeaderAndPin[8][i+1].verified = !!verified; totalVerifiedCount += verified?1:0; })
 p9verified.forEach(function(verified, i){pinsByHeaderAndPin[9][i+1].verified = !!verified; totalVerifiedCount += verified?1:0; })
-
 
 var Color = {
 	black: 30
@@ -258,7 +323,8 @@ function printTable(title, f) {
 
 printTable("GPIO: BANK_BIT", function(p){ return p.gpioNum ? p.gpioName : "" });
 printTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
-printTable("LEDscape Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
+printTable("Original Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
+printTable("New Channel Index", function(p){ return p.newChannelIndex!=undefined ? p.newChannelIndex : "" });
 
 //printTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
 console.info("Total Used Pins: " + totalVerifiedCount);
