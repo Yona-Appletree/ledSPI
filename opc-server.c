@@ -44,6 +44,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Method declarations
+void teardown_server();
+void start_server();
 
 // Frame Manipulation
 void ensure_frame_data();
@@ -291,7 +293,7 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
 	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
 
-	setup_server();
+	start_server();
 
 	pthread_exit(NULL);
 }
