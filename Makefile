@@ -10,7 +10,7 @@ TARGETS += opc-server
 LEDSCAPE_OBJS = ledscape.o pru.o util.o lib/cesanta/frozen.o lib/cesanta/mongoose.o
 LEDSCAPE_LIB := libledscape.a
 
-all: $(TARGETS) dmx_0.bin ws2801_0.bin ws2801_1.bin ws281x_0.bin ws281x_1.bin
+all: $(TARGETS) dmx_0.bin ws2801_0.bin ws2801_1.bin ws281x_0.bin ws281x_1.bin ws281x_newpins_0.bin ws281x_newpins_1.bin
 
 
 ifeq ($(shell uname -m),armv7l)
