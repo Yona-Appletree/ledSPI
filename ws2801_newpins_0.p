@@ -15,30 +15,30 @@
 
 /*
 First 24 pins in new layoutfrom pinmap.js
-00: gpio0_bit0 11
-01: gpio2_bit0 25
-02: gpio2_bit1  1
-03: gpio1_bit0 14
-04: gpio0_bit1 26
-05: gpio1_bit1 12
-06: gpio2_bit2 4
-07: gpio2_bit3 3
-08: gpio2_bit4 6
-09: gpio2_bit5 7
-10: gpio2_bit5 9
-11: gpio2_bit6  11
-12: gpio2_bit7 13
-13: gpio2_bit8 15
-14: gpio2_bit9 16
-15: gpio2_bit10 17
-16: gpio2_bit11 23
-17: gpio0_bit2 10
-18: gpio0_bit3 9
-19: gpio0_bit4 8
-20: gpio2_bit12 14
-21: gpio2_bit13 12
-22: gpio2_bit14 10
-23: gpio2_bit15 8
+00 00: gpio0_bit0 11
+01 00: gpio2_bit0 25
+02 01: gpio2_bit1  1
+03 01: gpio1_bit0 14
+04 02: gpio0_bit1 26
+05 02: gpio1_bit1 12
+06 03: gpio2_bit2 4
+07 03: gpio2_bit3 3
+08 04: gpio2_bit4 6
+09 04: gpio2_bit5 7
+10 05: gpio2_bit6 9
+11 05: gpio2_bit7  11
+12 06: gpio2_bit8 13
+13 06: gpio2_bit9 15
+14 07: gpio2_bit10 16
+15 07: gpio2_bit12 17
+16 08: gpio2_bit13 23
+17 08: gpio0_bit2 10
+18 09: gpio0_bit3 9
+19 09: gpio0_bit4 8
+20 10: gpio2_bit14 14
+21 10: gpio2_bit15 12
+22 11: gpio2_bit16 10
+23 11: gpio2_bit17 8
 */
 
 //===============================
@@ -48,34 +48,29 @@ First 24 pins in new layoutfrom pinmap.js
 // for clarity.
 
 #define gpio0_bit0 11  // DATA
-// First CLOCK...
-#define gpio2_bit1  1  // DATA
-#define gpio0_bit1 26  // DATA
-#define gpio2_bit2 4   // DATA
-#define gpio2_bit4 6   // DATA
-#define gpio2_bit5 9   // DATA
-#define gpio2_bit7 13  // DATA
-#define gpio2_bit9 16  // DATA
-#define gpio2_bit11 23 // DATA
-#define gpio0_bit3 9   // DATA
-#define gpio2_bit12 14 // DATA
-#define gpio2_bit14 10 // DATA
-// Last CLOCK....
-
-// First Data
 #define gpio2_bit0 25  // CLOCK
+#define gpio2_bit1  1  // DATA
 #define gpio1_bit0 14  // CLOCK
+#define gpio0_bit1 26  // DATA
 #define gpio1_bit1 12  // CLOCK
+#define gpio2_bit2 4   // DATA
 #define gpio2_bit3 3   // CLOCK
+#define gpio2_bit4 6   // DATA
 #define gpio2_bit5 7   // CLOCK
-#define gpio2_bit6  11 // CLOCK
-#define gpio2_bit8 15  // CLOCK
-#define gpio2_bit10 17 // CLOCK
+#define gpio2_bit6 9   // DATA
+#define gpio2_bit7  11 // CLOCK
+#define gpio2_bit8 13  // DATA
+#define gpio2_bit9 15  // CLOCK
+#define gpio2_bit10 16 // DATA
+#define gpio2_bit12 17 // CLOCK
+#define gpio2_bit13 23 // DATA
 #define gpio0_bit2 10  // CLOCK
+#define gpio0_bit3 9   // DATA
 #define gpio0_bit4 8   // CLOCK
-#define gpio2_bit13 12 // CLOCK
-// Last Data
-#define gpio2_bit15 8  // CLOCK
+#define gpio2_bit14 14 // DATA
+#define gpio2_bit15 12 // CLOCK
+#define gpio2_bit16 10 // DATA
+#define gpio2_bit17 8  // CLOCK
 
 #define GPIO0_DATA_MASK (0\
 |(1<<gpio0_bit0)\
@@ -89,12 +84,12 @@ First 24 pins in new layoutfrom pinmap.js
 |(1<<gpio2_bit1)\
 |(1<<gpio2_bit2)\
 |(1<<gpio2_bit4)\
-|(1<<gpio2_bit5)\
-|(1<<gpio2_bit7)\
-|(1<<gpio2_bit9)\
-|(1<<gpio2_bit11)\
-|(1<<gpio2_bit12)\
+|(1<<gpio2_bit6)\
+|(1<<gpio2_bit8)\
+|(1<<gpio2_bit10)\
+|(1<<gpio2_bit13)\
 |(1<<gpio2_bit14)\
+|(1<<gpio2_bit16)\
 )
 
 
@@ -113,13 +108,16 @@ First 24 pins in new layoutfrom pinmap.js
 |(1<<gpio2_bit0)\
 |(1<<gpio2_bit3)\
 |(1<<gpio2_bit5)\
-|(1<<gpio2_bit6)\
-|(1<<gpio2_bit8)\
-|(1<<gpio2_bit10)\
-|(1<<gpio2_bit13)\
+|(1<<gpio2_bit7)\
+|(1<<gpio2_bit9)\
+|(1<<gpio2_bit12)\
 |(1<<gpio2_bit15)\
+|(1<<gpio2_bit17)\
 )
 
+#define GPIO0_BOTH_MASK (GPIO0_DATA_MASK | GPIO0_CLOCK_MASK)
+#define GPIO1_BOTH_MASK (GPIO1_DATA_MASK | GPIO1_CLOCK_MASK)
+#define GPIO2_BOTH_MASK 0x283ffda //(GPIO2_DATA_MASK | GPIO2_CLOCK_MASK)
 
 /** Register map */
 #define data_addr r0
@@ -265,18 +263,18 @@ WORD_LOOP:
 		MOV gpio0_ones, 0
 		MOV gpio2_ones, 0
 
-		TEST_BIT(r10, gpio0, bit0)      // Bit 0
-		TEST_BIT(r11, gpio2, bit1)      // Bit 1
-		TEST_BIT(r12, gpio0, bit1)      // Bit 2
-		TEST_BIT(r13, gpio2, bit2)      // Bit 3
-		TEST_BIT(r14, gpio2, bit4)      // Bit 4
-		TEST_BIT(r15, gpio2, bit5)      // Bit 5
-		TEST_BIT(r16, gpio2, bit7)      // Bit 6
-		TEST_BIT(r17, gpio2, bit9)      // Bit 7
-		TEST_BIT(r18, gpio2, bit11)     // Bit 8
-		TEST_BIT(r19, gpio0, bit3)      // Bit 9
-		TEST_BIT(r20, gpio2, bit12)     // Bit 10
-		TEST_BIT(r21, gpio2, bit14)     // Bit 11
+		TEST_BIT(r10, gpio0, bit0)  // Bit 0
+		TEST_BIT(r11, gpio2, bit1)  // Bit 1
+		TEST_BIT(r12, gpio0, bit1)  // Bit 2
+		TEST_BIT(r13, gpio2, bit2)  // Bit 3
+		TEST_BIT(r14, gpio2, bit4)  // Bit 4
+		TEST_BIT(r15, gpio2, bit6)  // Bit 5
+		TEST_BIT(r16, gpio2, bit8)  // Bit 6
+		TEST_BIT(r17, gpio2, bit10) // Bit 7
+		TEST_BIT(r18, gpio2, bit13) // Bit 8
+		TEST_BIT(r19, gpio0, bit3)  // Bit 9
+		TEST_BIT(r20, gpio2, bit14) // Bit 10
+		TEST_BIT(r21, gpio2, bit16) // Bit 11
 
 		// Data loaded
 		///////////////////////////////////////////////////////////////////////
@@ -290,9 +288,9 @@ WORD_LOOP:
 		MOV r24, GPIO1 | GPIO_CLEARDATAOUT
 		MOV r25, GPIO2 | GPIO_CLEARDATAOUT
 
-		MOV r20, GPIO0_DATA_MASK
-		MOV r21, GPIO1_DATA_MASK
-		MOV r22, GPIO2_DATA_MASK
+		MOV r20, GPIO0_BOTH_MASK
+		MOV r21, GPIO1_BOTH_MASK
+		MOV r22, GPIO2_BOTH_MASK
 
 		SBBO r20, r23, 0, 4
 		SBBO r21, r24, 0, 4
@@ -306,7 +304,7 @@ WORD_LOOP:
 		SBBO gpio2_ones, r25, 0, 4
 
 		// Wait for a moment before raising the clocks
-		NOP
+		WAITNS 10, wait_load_time
 
 		// Clocks HIGH
 		MOV r20, GPIO0_CLOCK_MASK
@@ -329,13 +327,17 @@ WORD_LOOP:
 	QBNE WORD_LOOP, data_len, #0
 
 	// Final clear for the word
-	MOV r20, GPIO0_DATA_MASK
-	MOV r21, GPIO1_DATA_MASK
-	MOV r10, GPIO0 | GPIO_CLEARDATAOUT
-	MOV r11, GPIO1 | GPIO_CLEARDATAOUT
+	MOV r23, GPIO0 | GPIO_CLEARDATAOUT
+	MOV r24, GPIO1 | GPIO_CLEARDATAOUT
+	MOV r25, GPIO2 | GPIO_CLEARDATAOUT
 
-	SBBO r20, r10, 0, 4
-	SBBO r21, r11, 0, 4
+	MOV r20, GPIO0_BOTH_MASK
+	MOV r21, GPIO1_BOTH_MASK
+	MOV r22, GPIO2_BOTH_MASK
+
+	SBBO r20, r23, 0, 4
+	SBBO r21, r24, 0, 4
+	SBBO r22, r25, 0, 4
 
     // Delay at least 500 usec; this is the required reset
     // time for the LED strip to update with the new pixels.

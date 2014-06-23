@@ -43,10 +43,11 @@ typedef struct {
 } __attribute__((__packed__)) ledscape_frame_t;
 
 typedef enum {
-	WS281x = 0,
-	DMX = 1,
-	WS2801 = 2,
-	WS2801_NEWPINS = 3,
+	NOP = 0,
+	WS281x = 1,
+	DMX = 2,
+	WS2801 = 3,
+	WS2801_NEWPINS = 4,
 } ledscape_output_mode_t;
 
 typedef struct ws281x_command ws281x_command_t;

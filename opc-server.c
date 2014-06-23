@@ -320,7 +320,7 @@ void start_server() {
 
 	// Ensure we're not over the pixel limit
 	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
-		fprint(stderr, "%u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
+		fprintf(stderr, "%u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
 		return;
 	}
 
@@ -880,6 +880,10 @@ void* demo_thread(void* unused_data)
 						128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
 						&buffer[data_index]
 					);
+//
+//					buffer[data_index] = strip;
+//					buffer[data_index+2] = strip;
+//					buffer[data_index+1] = strip;
 				}
 			}
 

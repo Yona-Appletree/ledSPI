@@ -191,6 +191,7 @@ ledscape_init_with_modes(
 	// Initiate the PRU0 program
 	const char* pru0_program_filename;
 	switch (pru0_mode) {
+		case NOP: pru0_program_filename = "./nop_0.bin"; break;
 		case WS281x: pru0_program_filename = "./ws281x_0.bin"; break;
 		case DMX: pru0_program_filename = "./dmx_0.bin"; break;
 		case WS2801: pru0_program_filename = "./ws2801_0.bin"; break;
@@ -211,6 +212,7 @@ ledscape_init_with_modes(
 	// Initiate the PRU1 program
 	const char* pru1_program_filename;
 	switch (pru1_mode) {
+		case NOP: pru1_program_filename = "./nop_1.bin"; break;
 		case WS281x: pru1_program_filename = "./ws281x_1.bin"; break;
 		case DMX:
 			warn("PRU1 does not currently support DMX.");
@@ -265,6 +267,7 @@ ledscape_set_color(
 
 const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
 	switch (mode) {
+		case NOP: return "NOP";
 		case WS281x: return "WS281x";
 		case DMX: return "DMX";
 		case WS2801: return "WS2801";
@@ -274,7 +277,8 @@ const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
 }
 
 const ledscape_output_mode_t ledscape_output_mode_from_string(const char* input) {
-	if (strcmp(input, "WS281x") == 0) return WS281x;
+	if (strcmp(input, "NOP") == 0) return NOP;
+	else if (strcmp(input, "WS281x") == 0) return WS281x;
 	else if (strcmp(input, "DMX") == 0) return DMX;
 	else if (strcmp(input, "WS2801") == 0) return WS2801;
 	else if (strcmp(input, "WS2801_NEWPINS") == 0) return WS2801_NEWPINS;

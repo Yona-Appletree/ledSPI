@@ -78,8 +78,8 @@ Second 24 pins in new layout from pinmap.js
  |(1<<gpio0_bit2)\
  |(1<<gpio0_bit4)\
  |(1<<gpio0_bit6)\
- |(1<<gpio0_bit6)\
  |(1<<gpio0_bit7)\
+ |(1<<gpio0_bit8)\
 )
 
 #define GPIO1_DATA_MASK (0\
@@ -106,7 +106,7 @@ Second 24 pins in new layout from pinmap.js
 |(1<<gpio0_bit1)\
 |(1<<gpio0_bit3)\
 |(1<<gpio0_bit5)\
-|(1<<gpio0_bit8)\
+|(1<<gpio0_bit9)\
 )
 
 #define GPIO1_CLOCK_MASK (0\
@@ -124,6 +124,12 @@ Second 24 pins in new layout from pinmap.js
 |(1<<gpio3_bit1)\
 |(1<<gpio3_bit3)\
 )
+
+
+#define GPIO0_BOTH_MASK (GPIO0_DATA_MASK | GPIO0_CLOCK_MASK)
+#define GPIO1_BOTH_MASK (GPIO1_DATA_MASK | GPIO1_CLOCK_MASK)
+#define GPIO2_BOTH_MASK (GPIO2_DATA_MASK | GPIO2_CLOCK_MASK)
+#define GPIO3_BOTH_MASK (GPIO3_DATA_MASK | GPIO3_CLOCK_MASK)
 
 /** Register map */
 #define data_addr r0
@@ -295,10 +301,10 @@ WORD_LOOP:
 		MOV r26, GPIO2 | GPIO_CLEARDATAOUT
 		MOV r27, GPIO3 | GPIO_CLEARDATAOUT
 
-		MOV r20, GPIO0_DATA_MASK
-		MOV r21, GPIO1_DATA_MASK
-		MOV r22, GPIO2_DATA_MASK
-		MOV r23, GPIO3_DATA_MASK
+		MOV r20, GPIO0_BOTH_MASK
+		MOV r21, GPIO1_BOTH_MASK
+		MOV r22, GPIO2_BOTH_MASK
+		MOV r23, GPIO3_BOTH_MASK
 		SBBO r20, r24, 0, 4
 		SBBO r21, r25, 0, 4
 		SBBO r22, r26, 0, 4
@@ -338,14 +344,19 @@ WORD_LOOP:
 	QBNE WORD_LOOP, data_len, #0
 
 	// Clear the 1 bits from the final frame 
-	MOV r22, GPIO2_DATA_MASK
-	MOV r23, GPIO3_DATA_MASK
-	MOV r12, GPIO2 | GPIO_CLEARDATAOUT
-	MOV r13, GPIO3 | GPIO_CLEARDATAOUT
+	MOV r24, GPIO0 | GPIO_CLEARDATAOUT
+	MOV r25, GPIO1 | GPIO_CLEARDATAOUT
+	MOV r26, GPIO2 | GPIO_CLEARDATAOUT
+	MOV r27, GPIO3 | GPIO_CLEARDATAOUT
 
-	WAITNS 1000, end_of_frame_clear_wait
-	SBBO r23, r13, 0, 4
-	SBBO r22, r12, 0, 4
+	MOV r20, GPIO0_BOTH_MASK
+	MOV r21, GPIO1_BOTH_MASK
+	MOV r22, GPIO2_BOTH_MASK
+	MOV r23, GPIO3_BOTH_MASK
+	SBBO r20, r24, 0, 4
+	SBBO r21, r25, 0, 4
+	SBBO r22, r26, 0, 4
+	SBBO r23, r27, 0, 4
 
     // Delay at least 50 usec; this is the required reset
     // time for the LED strip to update with the new pixels.
