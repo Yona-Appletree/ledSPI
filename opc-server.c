@@ -71,6 +71,7 @@ static struct {
 	uint16_t udp_port;
 	uint16_t leds_per_strip;
 	uint16_t used_strip_count;
+	uint8_t demo_enabled;
 
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
@@ -93,6 +94,7 @@ static struct {
 	.udp_port = 7890,
 	.leds_per_strip = 176,
 	.used_strip_count = LEDSCAPE_NUM_STRIPS,
+	.demo_enabled = TRUE,
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
@@ -181,6 +183,8 @@ static struct option long_options[] =
     {"strip-count", optional_argument, NULL, 's'},
     {"dimensions", optional_argument, NULL, 'd'},
 
+    {"no-demo", no_argument, NULL, 'D'},
+
     {"no-interpolation", no_argument, NULL, 'i'},
     {"no-dithering", no_argument, NULL, 't'},
     {"no-lut", no_argument, NULL, 'l'},
@@ -201,7 +205,7 @@ int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:itlL:r:g:b:0:1:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:DitlL:r:g:b:0:1:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -232,6 +236,9 @@ int main(int argc, char ** argv)
 			}
 		} break;
 
+        case 'D': {
+            g_server_config.demo_enabled = FALSE;
+        } break;
 
 		case 'i': {
 			g_server_config.interpolation_enabled = FALSE;
@@ -270,8 +277,8 @@ int main(int argc, char ** argv)
 		} break;
 
 		default:
-			fprintf(stderr, "Usage: %s [-p <port>] [-c <led_count> | -d <width>x<height>] [-i | --no-interpolation] "
-				"[-t | --no-dithering] [-l | --no-lut] [-L | lum_power <lum_power>] "
+			fprintf(stderr, "Usage: %s [-p <port>] [-c <led_count> | -d <width>x<height>] [-D | --no-demo]"
+			    "[-i | --no-interpolation] [-t | --no-dithering] [-l | --no-lut] [-L | lum_power <lum_power>] "
 				"[-r | -red_bal <red_bal>] [-g | -green_bal <green_bal>] [-b | -blue_bal <blue_bal>]\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
@@ -384,6 +391,25 @@ void save_config_file() {
 		(double)g_server_config.white_point.green,
 		(double)g_server_config.white_point.blue
 	);
+
+	fprintf(stderr,
+		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
+		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+	);
+	fprintf(stderr, g_server_config.json);
+
+	build_lookup_tables();
+	ensure_frame_data();
+
+	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
+	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
+	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
+	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+	if (g_server_config.demo_enabled) {
+		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+	}
+
+	pthread_exit(NULL);
 }
 
 void build_lookup_tables() {
