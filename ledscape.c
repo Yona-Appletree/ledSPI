@@ -277,10 +277,10 @@ const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode) {
 }
 
 const ledscape_output_mode_t ledscape_output_mode_from_string(const char* input) {
-	if (strcmp(input, "NOP") == 0) return NOP;
-	else if (strcmp(input, "WS281x") == 0) return WS281x;
-	else if (strcmp(input, "DMX") == 0) return DMX;
-	else if (strcmp(input, "WS2801") == 0) return WS2801;
-	else if (strcmp(input, "WS2801_NEWPINS") == 0) return WS2801_NEWPINS;
+	if (stricmp(input, "NOP") == 0) return NOP;
+	else if (stricmp(input, "WS281x") == 0) return WS281x;
+	else if (stricmp(input, "DMX") == 0) return DMX;
+	else if (stricmp(input, "WS2801") == 0) return WS2801;
+	else if (stricmp(input, "WS2801_NEWPINS") == 0) return WS2801_NEWPINS;
 	else return WS281x;
 }
