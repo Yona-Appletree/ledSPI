@@ -236,9 +236,9 @@ int main(int argc, char ** argv)
 			}
 		} break;
 
-        case 'D': {
-            g_server_config.demo_enabled = FALSE;
-        } break;
+		case 'D': {
+			g_server_config.demo_enabled = FALSE;
+		} break;
 
 		case 'i': {
 			g_server_config.interpolation_enabled = FALSE;
@@ -298,7 +298,13 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+
+	if (g_server_config.demo_enabled) {
+		printf("Demo Mode Enabled\n");
+		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+	} else {
+		printf("Demo Mode Disabled\n");
+	}
 
 	start_server();
 
