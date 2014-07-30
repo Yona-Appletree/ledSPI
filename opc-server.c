@@ -294,8 +294,6 @@ int main(int argc, char ** argv)
 		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
 		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
 	);
-	save_config_file();
-	fprintf(stderr, g_server_config.json);
 
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
@@ -349,13 +347,12 @@ void start_server() {
 		g_server_config.pru0_mode,
 		g_server_config.pru1_mode
 	);
+
+	build_config_json();
+	fprintf(stderr, g_server_config.json);
 }
 
-void load_config_file() {
-
-}
-
-void save_config_file() {
+void build_config_json() {
 	// Build config JSON
 	sprintf(
 		g_server_config.json,
@@ -399,25 +396,6 @@ void save_config_file() {
 		(double)g_server_config.white_point.green,
 		(double)g_server_config.white_point.blue
 	);
-
-//	fprintf(stderr,
-//		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
-//		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
-//	);
-//	fprintf(stderr, g_server_config.json);
-//
-//	build_lookup_tables();
-//	ensure_frame_data();
-//
-//	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
-//	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
-//	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-//	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
-//	if (g_server_config.demo_enabled) {
-//		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
-//	}
-//
-//	pthread_exit(NULL);
 }
 
 void build_lookup_tables() {
