@@ -294,6 +294,7 @@ int main(int argc, char ** argv)
 		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
 		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
 	);
+	save_config_file();
 	fprintf(stderr, g_server_config.json);
 
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
@@ -399,24 +400,24 @@ void save_config_file() {
 		(double)g_server_config.white_point.blue
 	);
 
-	fprintf(stderr,
-		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
-		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
-	);
-	fprintf(stderr, g_server_config.json);
-
-	build_lookup_tables();
-	ensure_frame_data();
-
-	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
-	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
-	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
-	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
-	if (g_server_config.demo_enabled) {
-		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
-	}
-
-	pthread_exit(NULL);
+//	fprintf(stderr,
+//		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
+//		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+//	);
+//	fprintf(stderr, g_server_config.json);
+//
+//	build_lookup_tables();
+//	ensure_frame_data();
+//
+//	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
+//	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
+//	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
+//	pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+//	if (g_server_config.demo_enabled) {
+//		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
+//	}
+//
+//	pthread_exit(NULL);
 }
 
 void build_lookup_tables() {
@@ -963,10 +964,10 @@ void* udp_server_thread(void* unused_data)
 	fprintf(stderr, "Starting UDP server on port %d\n", g_server_config.udp_port);
 
 	// Gen some fake data!
-	uint32_t count = g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3;
-	uint8_t* data = malloc(count);
-
-	uint8_t offset = 0;
+//	uint32_t count = g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3;
+//	uint8_t* data = malloc(count);
+//
+//	uint8_t offset = 0;
 	// for (;;) {
 	// 	offset++;
 
