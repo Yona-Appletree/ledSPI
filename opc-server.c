@@ -60,6 +60,7 @@ void* demo_thread(void* threadarg);
 
 // Config Methods
 void build_lookup_tables();
+void build_config_json();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Data
@@ -300,10 +301,10 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
 
 	if (g_server_config.demo_enabled) {
-		printf("Demo Mode Enabled\n");
+		printf("[main] Demo Mode Enabled\n");
 		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
 	} else {
-		printf("Demo Mode Disabled\n");
+		printf("[main] Demo Mode Disabled\n");
 	}
 
 	start_server();
@@ -312,7 +313,7 @@ int main(int argc, char ** argv)
 }
 
 void teardown_server() {
-	printf("Tearing down server...\n");
+	printf("[main] Tearing down server...\n");
 
 	pthread_mutex_lock(&g_frame_data.mutex);
 	pthread_mutex_lock(&g_server_config.mutex);
@@ -325,11 +326,11 @@ void teardown_server() {
 	pthread_mutex_unlock(&g_server_config.mutex);
 	pthread_mutex_unlock(&g_frame_data.mutex);
 
-	printf("Teardown Complete.\n");
+	printf("[main] Teardown Complete.\n");
 }
 
 void start_server() {
-	printf("Starting server...");
+	printf("[main] Starting server...");
 
 	// Ensure we're not over the pixel limit
 	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
@@ -871,7 +872,7 @@ void* demo_thread(void* unused_data)
 	struct timeval now_tv, delta_tv;
 	uint8_t demo_enabled = FALSE;
 
-	for (uint16_t i = 0; /*ever*/; i+=4) {
+	for (uint16_t i = 0; /*ever*/; i+=400) {
 		// Calculate time since last remote data
 		pthread_mutex_lock(&g_frame_data.mutex);
 		gettimeofday(&now_tv, NULL);
@@ -926,7 +927,7 @@ void* demo_thread(void* unused_data)
 			set_next_frame_data(buffer, buffer_size, FALSE);
 		}
 
-		usleep(1e6 / 30);
+		usleep(1e6);
 	}
 
 	pthread_exit(NULL);
@@ -939,26 +940,77 @@ void* demo_thread(void* unused_data)
 void* udp_server_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "Starting UDP server on port %d\n", g_server_config.udp_port);
 
-	// Gen some fake data!
-//	uint32_t count = g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3;
-//	uint8_t* data = malloc(count);
-//
-//	uint8_t offset = 0;
-	// for (;;) {
-	// 	offset++;
+	// Disable if given port 0
+	if (g_server_config.udp_port == 0) {
+		fprintf(stderr, "[udp] Not starting UDP server; Port is zero.\n");
+		pthread_exit(NULL);
+		return NULL;
+	}
 
-	// 	for (uint32_t i=0; i<count; i+=3) {
-	// 		// data[i] = (i + offset) % 64;
-	// 		// data[i+1] = (i + offset + 256/3) % 64;
-	// 		// data[i+2] = (i + offset + 512/3) % 64;
-	// 		data[i] = data[i+1] = data[i+2] = (offset%2==0) ? 0 : 32;
-	// 	}
+	uint32_t required_packet_size = g_server_config.used_strip_count * g_server_config.leds_per_strip * 3 + sizeof(opc_cmd_t);
+	if (required_packet_size > 65507) {
+		die(
+			"[udp] OPC command for %d LEDs cannot fit in UDP packet. Use --count or --strip-count to reduce the number of requried LEDs, or disable UDP server with --udp-port 0\n",
+			g_server_config.used_strip_count * g_server_config.leds_per_strip
+		);
+	}
 
-	// 	set_next_frame_data(data, count);
-	// 	usleep(1000000);
-	// }
+	fprintf(stderr, "[udp] Starting UDP server on port %d\n", g_server_config.udp_port);
+	uint8_t buf[65536];
+
+	const int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+
+	if (sock < 0)
+		die("[udp] socket failed: %s\n", strerror(errno));
+
+	struct sockaddr_in6 addr = {
+		.sin6_family = AF_INET6,
+		.sin6_addr = in6addr_any,
+		.sin6_port = htons(g_server_config.udp_port),
+	};
+
+	if (bind(sock, (const struct sockaddr*) &addr, sizeof(addr)) < 0)
+		die("[udp] bind port %d failed: %s\n", g_server_config.udp_port, strerror(errno));
+
+	while (1)
+	{
+		const ssize_t rc = recv(sock, buf, sizeof(buf), 0);
+		if (rc < 0) {
+			fprintf(stderr, "[udp] recv failed: %s\n", strerror(errno));
+			continue;
+		}
+
+		// Enough data for an OPC command header?
+		if (rc >= sizeof(opc_cmd_t)) {
+			opc_cmd_t* cmd = (opc_cmd_t*) buf;
+			const size_t cmd_len = cmd->len_hi << 8 | cmd->len_lo;
+
+			uint8_t* opc_cmd_payload = ((uint8_t*)buf) + sizeof(opc_cmd_t);
+
+			// Enough data for the entire command?
+			if (rc >= sizeof(opc_cmd_t) + cmd_len) {
+				if (cmd->command == 0) {
+					set_next_frame_data(opc_cmd_payload, cmd_len, TRUE);
+				} else if (cmd->command == 255) {
+					// System specific commands
+					const uint16_t system_id = opc_cmd_payload[0] << 8 | opc_cmd_payload[1];
+
+					if (system_id == OPC_SYSID_LEDSCAPE) {
+						const opc_ledscape_cmd_id_t ledscape_cmd_id = opc_cmd_payload[2];
+
+						 if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+							warn("[udp] WARN: Config request request received but not supported on UDP.\n");
+						} else {
+							warn("[udp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+						}
+					} else {
+						warn("[udp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);
+					}
+				}
+			}
+		}
+	}
 
 	pthread_exit(NULL);
 }
