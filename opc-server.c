@@ -279,9 +279,9 @@ int main(int argc, char ** argv)
 		} break;
 
 		default:
-			fprintf(stderr, "Usage: %s [-p <port>] [-c <led_count> | -d <width>x<height>] [-D | --no-demo]"
+			fprintf(stderr, "Usage: %s [-p <port>] [-s <strip_count>] [-c <led_count> | -d <width>x<height>] [-D | --no-demo]"
 			    "[-i | --no-interpolation] [-t | --no-dithering] [-l | --no-lut] [-L | lum_power <lum_power>] "
-				"[-r | -red_bal <red_bal>] [-g | -green_bal <green_bal>] [-b | -blue_bal <blue_bal>" "
+				"[-r | -red_bal <red_bal>] [-g | -green_bal <green_bal>] [-b | -blue_bal <blue_bal>"
 				"[-0 <NOP,WS281x,DMX,WS2801,WS2801_NEWPINS>] [-1 <NOP,WS281x,DMX,WS2801,WS2801_NEWPINS>]\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
