@@ -1,10 +1,10 @@
 Overview
 ========
 
-LEDscape is a library for controlling 48 channels of WS2811-based LEDs from
+LEDscape is a library for controlling 24 channels of WS2801 leds and 48 channels of WS2811/WS2812 LEDs from
 a single Beagle Bone Black. It makes use of the two Programmable Realtime Units (PRUs),
-each controlling 24 outputs. It can drive strings of 256 LEDs at around 60fps
-and 512 LEDs at 30 30fps, enabling a single BBB to control 24,576 LEDs at once.
+each controlling 24 outputs. It can drive strings of 64 LEDS at 400 fps, 256 LEDs at around 120 fps,
+and 512 LEDs at 50 fps, enabling a single BBB to control 24,576 LEDs at once.
 
 The libary can be used directly from C or C++ or data can be sent using the
 Open Pixel Control protocol (http://openpixelcontrol.org) from a variety of
@@ -18,7 +18,7 @@ has been repurposed to drive a different type of LED panel (e.g. http://www.adaf
 
 This version of the library was forked from his original WS2811 work. Various
 improvements have been made in the attempt to make an accessible and powerful
-ws2811 driver based on the BBB. Many thanks to Trammell for his execellent work
+WS28xx driver based on the BBB. Many thanks to Trammell for his execellent work
 in scaffolding the BBB and PRUs for driving LEDs.
 
 
@@ -34,6 +34,8 @@ there are +5V signals involved.
 
 Installation and Usage
 ======================
+It is necessary to SSH onto the Beaglebone Black using serial, ethernet, or USB connections.  Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at [Adafruit's Learning Site] (https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux)
+
 
 To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning this github repository.
 
@@ -166,7 +168,7 @@ Hardware Tips
 Connecting the LEDs to the correct pins and level-shifting the voltages
 to 5v can be quite complex when using many output ports of the BBB. 
 
-While there may be others, RGB123 makes an execellent 24/48 pin cape designed 
+While there may be others, RGB123 makes an excellent 24/48 pin cape designed 
 specifically for this version of LEDscape: [24 pin](http://rgb-123.com/product/beaglebone-black-24-output-cape/) or [48 pin](http://rgb-123.com/product/beaglebone-black-48-output-cape/)
 
 If you do not use a cape, refer to the pin mapping section below and remember
