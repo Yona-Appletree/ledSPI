@@ -53,7 +53,6 @@ After rebooting you will need to enter the LEDscape folder and compile the LEDsc
 	make
 	
 Note: Locating the am335x-boneblack.dtb file:
----------------------------------------------
 * Older BBB have the file in /boot;
 * Some distros (e.g. Arch) keep these files in /boot/dtbs;
 * The Debian distribution keeps the file in /boot/uboot/dtbs (when mounted
@@ -136,8 +135,18 @@ possible with the given number of LEDs.
 These options can be configured by command-line swithes that are lightly
 documented by `opc-server -h`. The most common setup will be:
 
-	./opc-server --count LED_COUNT --strip-count STRIP_COUNT
+	./opc-server --strip-count STRIP_COUNT --count LED_COUNT
+
+An examples for 48 strips of 64 leds (WS2811 or WS2812) would look like:
+
+	./opc-server -s48 -c64
 	
+Recently, support for WS2801 (5V, Data, Clock, Gnd) chips has been added.  
+Support for 24 strips of 64 leds (WS2801) would look like:
+
+	./opc-server -s48 -c64 -0ws2801 -1ws2801 (Pin map #1)
+	./opc-server -s48 -c64 -0ws2801_newpins -1ws2801_newpins (Pin map #2)
+
 Note that future versions of `opc-server` will make use of a JSON configuration
 and the current flags will be deprecated or removed.
 
