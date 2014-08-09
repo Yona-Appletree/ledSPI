@@ -35,36 +35,51 @@ there are +5V signals involved.
 Installation and Usage
 ======================
 
-To use LEDscape, download it to your BeagleBone Black.
+To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning this github repository.
 
-First, make sure that LEDscape compiles:
+	git clone git://github.com/Yona-Appletree/LEDscape
 
-	make
+Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
 
-Before LEDscape will function, you will need to replace the device tree
-file and reboot.
-
+	cd LEDscape
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
+	modprobe uio_pruss
 	reboot
 
-Locating the am335x-boneblack.dtb file:
+After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
 
+	cd LEDscape
+	make
+	
+Note: Locating the am335x-boneblack.dtb file:
+---------------------------------------------
 * Older BBB have the file in /boot;
 * Some distros (e.g. Arch) keep these files in /boot/dtbs;
 * The Debian distribution keeps the file in /boot/uboot/dtbs (when mounted
   over USB, the /boot/uboot directory is read-only from the BBB and you
-  need to do the file operations from the host system.
-
-You will also need to have the uio\_pruss module loaded.
+  need to do the file operations from the host system.	
 	
-	modprobe uio_pruss
+Disabling HDMI
+--------------
 
-You can now test LEDscape, run the following to display a map of how
-the LEDscape strip ordering coreesponds to the GPIO pins on the BBB:
+If you need to use all 48 pins made available by LEDscape, you'll have
+to disable the HDMI "cape" on the BeagleBone Black.
 
-	node pinmap.js
+Mount the FAT32 partition, either through linux on the BeagleBone or
+by plugging the USB into a computer, and add the following to the
+first line of `uEnv.txt'
 
+	capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+
+It should read something like
+
+	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+
+Then reboot the BeagleBone Black.	
+
+Test LEDscape
+-------------
 Connect a WS2811-based LED chain to the Beagle Bone. The strip must
 be running at the same voltage as the data signal. If you are using
 an external 5v supply for the LEDs, you'll need to use a level shifter
@@ -126,8 +141,6 @@ documented by `opc-server -h`. The most common setup will be:
 Note that future versions of `opc-server` will make use of a JSON configuration
 and the current flags will be deprecated or removed.
 
-
-
 Processing Example
 ========
 
@@ -142,33 +155,14 @@ Hardware Tips
 ========
 
 Connecting the LEDs to the correct pins and level-shifting the voltages
-to 5v can be quite complex when using many output ports of the BBB. While
-there may be others, RGB123 makes an execellent 24-pin cape designed 
-specifically for this version of LEDscape: http://rgb-123.com/product/beaglebone-black-24-output-cape/
+to 5v can be quite complex when using many output ports of the BBB. 
+
+While there may be others, RGB123 makes an execellent 24/48 pin cape designed 
+specifically for this version of LEDscape: [24 pin](http://rgb-123.com/product/beaglebone-black-24-output-cape/) or [48 pin](http://rgb-123.com/product/beaglebone-black-48-output-cape/)
 
 If you do not use a cape, refer to the pin mapping section below and remember
 that the BBB outputs data at 3.3v. If you run your LEDs at 5v (which most are),
-you will need to use a level-shifter of some sort. Adafruit has a decent one
-which works well: http://www.adafruit.com/products/757
-
-Disabling HDMI
-========
-
-If you need to use all 48 pins made available by LEDscape, you'll have
-to disable the HDMI "cape" on the BeagleBone Black.
-
-Mount the FAT32 partition, either through linux on the BeagleBone or
-by plugging the USB into a computer, and add the following to the
-first line of `uEnv.txt'
-
-	capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
-
-It should read something like
-
-	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
-
-Then reboot the BeagleBone Black.
-
+you will need to use a level-shifter of some sort. [Adafruit](http://www.adafruit.com/products/757) has a decent one which works well.  For custom circuit boards we recommend the [TI SN74LV245](http://octopart.com/partsearch#!?q=SN74LV245).
 
 Pin Mapping
 ========
