@@ -80,8 +80,7 @@ to disable the HDMI "cape" on the BeagleBone Black.
 Mount the FAT32 partition, either through linux on the BeagleBone or
 by plugging the USB into a computer, modify 'uEnv.txt' by changing:
 
-
-* Angstrom - RevB
+Angstrom - RevB
     
 	capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 
@@ -89,10 +88,8 @@ It should read something like
 
 	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 
-* Debian - RevB
-    
-Find the line below and uncomment 
-    	
+Debian - RevB
+
 	##Disable HDMI
 	#cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 	
