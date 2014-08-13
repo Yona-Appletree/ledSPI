@@ -43,14 +43,16 @@ To use LEDscape, download it to your BeagleBone Black by connecting the BBB to t
 
 Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
 
-    Angstrom - RevB
+Angstrom - RevB
+
 	cd LEDscape
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	modprobe uio_pruss
 	reboot
 
-    Debian - RevC
+Debian - RevC
+
 	cd LEDscape
 	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/uboot/dtbs/
@@ -79,7 +81,7 @@ Mount the FAT32 partition, either through linux on the BeagleBone or
 by plugging the USB into a computer, modify 'uEnv.txt' by changing:
 
 
-Angstrom - RevB
+* Angstrom - RevB
     
 	capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 
@@ -87,7 +89,7 @@ It should read something like
 
 	optargs=quiet drm.debug=7 capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 
-Debian - RevB
+* Debian - RevB
     
 Find the line below and uncomment 
     	
