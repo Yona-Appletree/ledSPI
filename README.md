@@ -43,11 +43,19 @@ To use LEDscape, download it to your BeagleBone Black by connecting the BBB to t
 
 Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
 
+    Angstrom - RevB
 	cd LEDscape
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	modprobe uio_pruss
 	reboot
+
+    Debian - RevC
+	cd LEDscape
+	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
+	cp am335x-boneblack.dtb /boot/uboot/dtbs/
+	modprobe uio_pruss
+	reboot    
 
 After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
 
