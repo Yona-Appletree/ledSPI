@@ -29,7 +29,7 @@ static void ledscape_fill_color(
 
 int main (void)
 {
-	const int num_pixels = 176;
+	const int num_pixels = 64;
 	ledscape_t * const leds = ledscape_init(num_pixels);
 	time_t last_time = time(NULL);
 	unsigned last_i = 0;
