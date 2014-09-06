@@ -46,10 +46,6 @@ Angstrom - RevB
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	modprobe uio_pruss
-	
-	sudo sed -i 's/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN'/g /boot/uboot/uEnv.txt
-	
-	sudo sed -i 's/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G'/g /boot/uboot/uEnv.txt
 	reboot
 
 Debian - RevC
@@ -59,6 +55,12 @@ Debian - RevC
 	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/uboot/dtbs/
 	modprobe uio_pruss
+
+	# Disable HDMI
+	sudo sed -i 's/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN'/g /boot/uboot/uEnv.txt
+	
+	sudo sed -i 's/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G'/g /boot/uboot/uEnv.txt
+
 	reboot    
 
 After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
