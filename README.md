@@ -37,14 +37,11 @@ Installation and Usage
 It is necessary to SSH onto the Beaglebone Black using serial, ethernet, or USB connections.  Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at [Adafruit's Learning Site] (https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux)
 
 
-To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning this github repository.
-
-	git clone git://github.com/Yona-Appletree/LEDscape
-
-Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
+To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning this github repository. Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
 
 Angstrom - RevB
 
+	git clone git://github.com/Yona-Appletree/LEDscape
 	cd LEDscape
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
@@ -53,6 +50,7 @@ Angstrom - RevB
 
 Debian - RevC
 
+	git clone git://github.com/Yona-Appletree/LEDscape
 	cd LEDscape
 	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/uboot/dtbs/
@@ -79,6 +77,10 @@ to disable the HDMI "cape" on the BeagleBone Black.
 
 Mount the FAT32 partition, either through linux on the BeagleBone or
 by plugging the USB into a computer, modify 'uEnv.txt' by changing:
+
+Using vi
+	
+	vi /boot/uboot/uEnv.txt
 
 Angstrom - RevB
     
