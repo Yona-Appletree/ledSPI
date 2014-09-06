@@ -32,8 +32,8 @@ damage the pin drivers and cause problems in the ARM, especially if
 there are +5V signals involved.
 
 
-Installation and Usage
-======================
+Installation and Usage - Command Line
+=====================================
 It is necessary to SSH onto the Beaglebone Black using serial, ethernet, or USB connections.  Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at [Adafruit's Learning Site] (https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux)
 
 
@@ -46,6 +46,10 @@ Angstrom - RevB
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	modprobe uio_pruss
+	
+	sudo sed -i 's/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN'/g /boot/uboot/uEnv.txt
+	
+	sudo sed -i 's/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G'/g /boot/uboot/uEnv.txt
 	reboot
 
 Debian - RevC
@@ -101,6 +105,20 @@ Change to
 	cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
     
 Save and Reboot the BeagleBone Black.	
+
+Installation and Usage - Using Bash Script
+==========================================
+
+	git clone git://github.com/Yona-Appletree/LEDscape
+	cd LEDscape
+	chmod u+x install_RevC
+	sudo ./install_RevC
+
+The BBB will automatically reboot after running this bash script.  It will now be necessary to "make" and compile LEDscape.
+
+	cd LEDscape
+	make
+
 
 Test LEDscape
 -------------
