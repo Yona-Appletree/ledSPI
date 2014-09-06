@@ -1,0 +1,17 @@
+ #!/bin/bash
+
+#Copy dtb files
+cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
+cp am335x-boneblack.dtb /boot/uboot/dtbs/
+
+#Load PRU Module
+modprobe uio_pruss
+
+#DISABLE HDMI
+sudo sed -i 's/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN'/g /boot/uboot/uEnv.txt
+
+#Correct HDMI line that was also changed
+sudo sed -i 's/optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G/#optargs=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN,BB-BONE-EMMC-2G'/g /boot/uboot/uEnv.txt
+
+#Reboot the BeagleBone
+reboot  
