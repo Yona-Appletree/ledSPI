@@ -1,14 +1,9 @@
 Overview
 ========
+LEDscape is a library and service for controlling individually addressable LEDs from a 
+Beagle Bone Black using the onboard PRUs. It currently supports WS281x (WS2811, WS2812, WS2812b), WS2801 and initial 
+support for DMX. It is designed to be used with level-shifter capes like those produced by RGB-123.
 
-LEDscape is a library for controlling 24 channels of WS2801 leds and 48 channels of WS2811/WS2812 LEDs from
-a single Beagle Bone Black. It makes use of the two Programmable Realtime Units (PRUs),
-each controlling 24 outputs. It can drive strings of 64 LEDS at 400 fps, 256 LEDs at around 120 fps,
-and 512 LEDs at 50 fps, enabling a single BBB to control 24,576 LEDs at once.
-
-The libary can be used directly from C or C++ or data can be sent using the
-Open Pixel Control protocol (http://openpixelcontrol.org) from a variety of
-sources (e.g. Processing, Java, Python, etc...)
 
 Background
 ------
@@ -16,28 +11,29 @@ LEDscape was originally written by Trammell Hudson (http://trmm.net/Category:LED
 controlling WS2811-based LEDs. Since his original work, his version (https://github.com/osresearch/LEDscape)
 has been repurposed to drive a different type of LED panel (e.g. http://www.adafruit.com/products/420).
 
-This version of the library was forked from his original WS2811 work. Various
-improvements have been made in the attempt to make an accessible and powerful
-WS28xx driver based on the BBB. Many thanks to Trammell for his execellent work
+This version of the library was forked from his original WS2811 work. Various improvements have been made in the 
+attempt to make an accessible and powerful LED driver based on the BBB. Many thanks to Trammell for his excellent work
 in scaffolding the BBB and PRUs for driving LEDs.
 
 
 WARNING
 =======
 
-This code works with the PRU units on the Beagle Bone and can easily
-cause *hard crashes*.  It is still being debugged and developed.
-Be careful hot-plugging things into the headers -- it is possible to
-damage the pin drivers and cause problems in the ARM, especially if
-there are +5V signals involved.
+This code works with the PRU units on the Beagle Bone and can easily cause *hard crashes*.  It is still being debugged 
+and developed. Be careful hot-plugging things into the headers -- it is possible to damage the pin drivers and cause 
+problems in the ARM, especially if there are +5V signals involved.
 
 
 Installation and Usage - Command Line
 =====================================
-It is necessary to SSH onto the Beaglebone Black using serial, ethernet, or USB connections.  Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at [Adafruit's Learning Site] (https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux)
+It is necessary to have access to a shell onto the Beaglebone Black using serial, ethernet, or USB connections.  
+Examples on how to do this can be found at [BeagleBoard.org](http://beagleboard.org/getting-started) or at
+[Adafruit's Learning Site](https://learn.adafruit.com/ssh-to-beaglebone-black-over-usb/ssh-on-mac-and-linux).
 
 
-To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning this github repository. Before LEDscape will function, you will need to replace the device tree file, load the  uio\_pruss, and reboot by executing the commands listed below via the cmd line.
+To use LEDscape, download it to your BeagleBone Black by connecting the BBB to the internet via ethernet and cloning 
+this github repository. Before LEDscape will function, you will need to replace the device tree file, load the  
+uio\_pruss, and reboot by executing the commands listed below via the cmd line.
 
 Angstrom - RevB
 
@@ -105,35 +101,7 @@ Change to
 	##Disable HDMI
 	cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
     
-Save and Reboot the BeagleBone Black.	
-
-Installation and Usage - Using Bash Script
-==========================================
-
-	git clone git://github.com/Yona-Appletree/LEDscape
-	cd LEDscape
-	chmod u+x install_RevC
-	sudo ./install_RevC
-
-The BBB will automatically reboot after running this bash script.  It will now be necessary to "make" and compile LEDscape.
-
-	cd LEDscape
-	make
-
-
-Test LEDscape
--------------
-Connect a WS2811-based LED chain to the Beagle Bone. The strip must
-be running at the same voltage as the data signal. If you are using
-an external 5v supply for the LEDs, you'll need to use a level shifter
-or other technique to bring the BBB's 3.3v signals up to 5v.
-
-Once everything is connected, run the `rgb-test` program:
-
-	sudo ./rgb-test
-
-The LEDs should now be fading prettily. If not, go back and make
-sure everything is setup correctly.
+Save and Reboot the BeagleBone Black.
 
 Open Pixel Control Server
 =========================
@@ -154,11 +122,12 @@ work with systemctl to enable services.
 
 If you would prefer to run the receiver without adding it as a service:
 
-	sudo run-ledscape
+	sudo ./run-ledscape
 	
-By default LEDscape is configured for strings of 256 pixels, accepting OPC
-data on port 7890. You can adjust this by editing the run script and 
-editing the parameters to opc-rx.
+By default LEDscape is configured for strings of 256 WS2811 pixels, accepting OPC
+data on port 7890. You can adjust this by editing `run-ledscape` and 
+editing the parameters to `opc-server`
+
 
 Data Format
 -----------
@@ -167,6 +136,13 @@ The `opc-server` server accepts data on OPC channel 0. It expects the data for
 each LED strip concatonated together. This is done because LEDscape requires
 that data for all strips be present at once before flushing data data out to
 the LEDs. 
+
+`opc-server` supports both TCP and UDP data packets. The TCP port is specified with `--tcp-port <port>` and the UDP port
+with `--udp-port <port>`. Entering `0` for a port number will disable that server.
+ 
+Note that if using the UDP server, `opc-server` will limit the number of pixels to 21835, or 454 pixels per port if
+using all 48 ports.
+
 
 Features and Options
 --------------------
@@ -197,11 +173,9 @@ and the current flags will be deprecated or removed.
 Processing Example
 ========
 
-The easiest way to see that LEDscape can receive arbitrary data is to run
-the included Processing sketch, based on the examples from 
-FadeCandy (https://github.com/scanlime/fadecandy). There is a 16x16 panel
-example in processing/grid16x16_clouds. Edit the example to point at your
-beaglebone's hostname or IP and run 
+LEDscape provides versions of the FadeCandy processing examples modified to work better with LEDscape in the
+`processing` directory. Clone this repo on a computer and run these sketches, edited to point at your BBB hostname or
+ip address after starting `opc-server` or installing the system server.
 
 
 Hardware Tips
@@ -217,15 +191,28 @@ If you do not use a cape, refer to the pin mapping section below and remember
 that the BBB outputs data at 3.3v. If you run your LEDs at 5v (which most are),
 you will need to use a level-shifter of some sort. [Adafruit](http://www.adafruit.com/products/757) has a decent one which works well.  For custom circuit boards we recommend the [TI SN74LV245](http://octopart.com/partsearch#!?q=SN74LV245).
 
+
 Pin Mapping
 ========
 
-The mapping from LEDscape channel to BeagleBone GPIO pin can be generated by running the pinmap script:
+LEDscape currently supports two pin mappings. The mappings are chosen with the `-0` and `-1` program arguments. 
 
-	node pinmap.js
+| Mapping / Cape                                   | LED Chip      | PRU Program ID |
+| ------------------------------------------------ | ------------- | -------------- |
+| N/A                                              | Disable       | NOP            |
+| RGB-123 24-port cape/RS485 Cape/Older 48 5v cape | WS2811        | WS281X         |
+| RGB-123 24-port cape/RS485 Cape/Older 48 5v cape | WS2801        | WS2801         |
+| RGB-123 24-port cape/RS485 Cape/Older 48 5v cape | DMX           |                |
+| RGB-123 new 48-port capes                        | WS2801        | WS2801_NEWPINS |
 
-As of this writing, it generates the following:
+Start OPC-server (or edit `run-ledscape`) with arguments matching your setup (omit the <>)
 
+	./opc-server --count <led-count> --strip-count <highest used port - 1> -0 <PRU Program ID> -1 <PRU Program ID>
+
+If working with custom hardware, the mappings are:
+
+Old Mapping
+-----------
 		                       LEDscape Channel Index
 	 Row  Pin#       P9        Pin#  |  Pin#       P8        Pin# Row
 	  1    1                    2    |   1                    2    1
@@ -256,7 +243,8 @@ As of this writing, it generates the following:
 	              |-------|--------------------|-------|
 	                     LEDscape Channel Indexes
 
-As of this writing, a secondary pin mapping is available:
+NEWPINS mappings
+----------------
 
 		                       LEDscape Channel Index
 	 Row  Pin#       P9        Pin#  |  Pin#       P8        Pin# Row
