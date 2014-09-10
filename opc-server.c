@@ -65,8 +65,8 @@ void build_config_json();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Data
 static struct {
-	ledscape_output_mode_t pru0_mode;
-	ledscape_output_mode_t pru1_mode;
+	const char* output_mode_name;
+	const char* output_mapping_name;
 
 	uint16_t tcp_port;
 	uint16_t udp_port;
@@ -89,8 +89,8 @@ static struct {
 	pthread_mutex_t mutex;
 	char json[4096];
 } g_server_config = {
-	.pru0_mode = WS281x,
-	.pru1_mode = WS281x,
+	.output_mode_name = "ws281x",
+	.output_mapping_name = "v1",
 	.tcp_port = 7890,
 	.udp_port = 7890,
 	.leds_per_strip = 176,
@@ -141,6 +141,9 @@ static struct
 	struct timeval prev_current_delta_tv;
 
 	ledscape_t * leds;
+
+	char pru0_program_filename[4096];
+	char pru1_program_filename[4096];
 
 	uint32_t red_lookup[257];
 	uint32_t green_lookup[257];
@@ -200,14 +203,50 @@ static struct option long_options[] =
     {"pru0_mode", optional_argument, NULL, '0'},
     {"pru1_mode", optional_argument, NULL, '1'},
 
+    {"mode", optional_argument, NULL, 'm'},
+    {"mapping", optional_argument, NULL, 'M'},
+
     {NULL, 0, NULL, 0}
 };
+
+const void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
+	if (strcasecmp(input, "NOP") == 0) {
+		g_server_config.output_mode_name = "nop";
+		g_server_config.output_mapping_name = "v1";
+	}
+	else if (strcasecmp(input, "DMX") == 0) {
+		g_server_config.output_mode_name = "dmx";
+		g_server_config.output_mapping_name = "v1";
+	}
+	else if (strcasecmp(input, "WS2801") == 0) {
+		g_server_config.output_mode_name = "ws2801";
+		g_server_config.output_mapping_name = "v1";
+	}
+	else if (strcasecmp(input, "WS2801_NEWPINS") == 0) {
+		g_server_config.output_mode_name = "ws2801";
+		g_server_config.output_mapping_name = "v2";
+	}
+	else /*if (strcasecmp(input, "WS281x") == 0)*/ {
+		// The default case is to use ws281x
+		g_server_config.output_mode_name = "ws281x";
+		g_server_config.output_mapping_name = "v1";
+	}
+
+	fprintf(stderr,
+		"WARNING: PRU mode set using legacy -0 or -1 flags; please update to use --mode and --mapping.\n"
+		"   '%s' interpreted as mode '%s' and mapping '%s'\n",
+		input,
+		g_server_config.output_mode_name,
+		g_server_config.output_mapping_name
+	);
+}
+
 
 int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:DitlL:r:g:b:0:1:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:DitlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -271,11 +310,19 @@ int main(int argc, char ** argv)
 		} break;
 
 		case '0': {
-			g_server_config.pru0_mode = ledscape_output_mode_from_string(optarg);
+			set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
 		} break;
 
 		case '1': {
-			g_server_config.pru1_mode = ledscape_output_mode_from_string(optarg);
+			set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
+		} break;
+
+		case 'm': {
+			g_server_config.output_mode_name = optarg;
+		} break;
+
+		case 'M': {
+			g_server_config.output_mapping_name = optarg;
 		} break;
 
 		default:
@@ -330,24 +377,43 @@ void teardown_server() {
 	printf("[main] Teardown Complete.\n");
 }
 
+const char* build_pru_program_name(uint8_t pruNum) {
+	char* output_buffer;
+	size_t buffer_size;
+
+	if (pruNum == 0) {
+		output_buffer = g_frame_data.pru0_program_filename;
+		buffer_size = sizeof(g_frame_data.pru0_program_filename);
+	} else {
+		output_buffer = g_frame_data.pru1_program_filename;
+		buffer_size = sizeof(g_frame_data.pru1_program_filename);
+	}
+
+	snprintf(
+		output_buffer,
+		buffer_size,
+		"pru/bin/%s-%s-pru%d.bin",
+		g_server_config.output_mode_name,
+		g_server_config.output_mapping_name,
+		(int) pruNum
+	);
+
+	return output_buffer;
+}
+
 void start_server() {
 	printf("[main] Starting server...");
 
-	// Ensure we're not over the pixel limit
-	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
-		fprintf(stderr, "%u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
-		return;
-	}
 
 	// Setup tables
 	build_lookup_tables();
 	ensure_frame_data();
 
 	// Init LEDscape
-	g_frame_data.leds = ledscape_init_with_modes(
+	g_frame_data.leds = ledscape_init_with_programs(
 		g_server_config.leds_per_strip,
-		g_server_config.pru0_mode,
-		g_server_config.pru1_mode
+		build_pru_program_name(0),
+		build_pru_program_name(1)
 	);
 
 	build_config_json();
@@ -359,8 +425,8 @@ void build_config_json() {
 	sprintf(
 		g_server_config.json,
 		"{\n"
-			"\t" "\"pru0Mode\": \"%s\"," "\n"
-			"\t" "\"pru1Mode\": \"%s\"," "\n"
+			"\t" "\"outputMode\": \"%s\"," "\n"
+			"\t" "\"outputMapping\": \"%s\"," "\n"
 
 			"\t" "\"ledsPerStrip\": %d," "\n"
 			"\t" "\"usedStripCount\": %d," "\n"
@@ -380,8 +446,8 @@ void build_config_json() {
 			"\t" "}" "\n"
 		"}\n",
 
-		ledscape_output_mode_to_string(g_frame_data.leds->pru0_mode),
-		ledscape_output_mode_to_string(g_frame_data.leds->pru1_mode),
+		g_server_config.output_mode_name,
+		g_server_config.output_mapping_name,
 
 		g_server_config.leds_per_strip,
 		g_server_config.used_strip_count,
@@ -951,10 +1017,12 @@ void* udp_server_thread(void* unused_data)
 
 	uint32_t required_packet_size = g_server_config.used_strip_count * g_server_config.leds_per_strip * 3 + sizeof(opc_cmd_t);
 	if (required_packet_size > 65507) {
-		die(
-			"[udp] OPC command for %d LEDs cannot fit in UDP packet. Use --count or --strip-count to reduce the number of requried LEDs, or disable UDP server with --udp-port 0\n",
+		fprintf(stderr,
+			"[udp] OPC command for %d LEDs cannot fit in UDP packet. Use --count or --strip-count to reduce the number of required LEDs, or disable UDP server with --udp-port 0\n",
 			g_server_config.used_strip_count * g_server_config.leds_per_strip
 		);
+		pthread_exit(NULL);
+		return;
 	}
 
 	fprintf(stderr, "[udp] Starting UDP server on port %d\n", g_server_config.udp_port);
@@ -1079,6 +1147,13 @@ void* tcp_server_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
 
+	// Disable if given port 0
+	if (g_server_config.tcp_port == 0) {
+		fprintf(stderr, "[tcp] Not starting TCP server; Port is zero.\n");
+		pthread_exit(NULL);
+		return NULL;
+	}
+
 	struct ns_server server;
 	char s_bind_addr[128];
 
@@ -1090,7 +1165,7 @@ void* tcp_server_thread(void* unused_data)
 	ns_server_init(&server, NULL, event_handler);
 	int port = ns_bind(&server, s_bind_addr);
 	if (port < 0) {
-		printf("Failed to bind to port %s: %d\n", s_bind_addr, port);
+		printf("[tcp] Failed to bind to port %s: %d\n", s_bind_addr, port);
 		exit(-1);
 	}
 

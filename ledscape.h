@@ -57,22 +57,20 @@ typedef struct {
 	ws281x_command_t * ws281x_1;
 	pru_t * pru0;
 	pru_t * pru1;
-	ledscape_output_mode_t pru0_mode;
-	ledscape_output_mode_t pru1_mode;
+	const char* pru0_program_filename;
+	const char* pru1_program_filename;
 	unsigned num_pixels;
 	size_t frame_size;
 } ledscape_t;
 
-extern ledscape_t *
-ledscape_init(
-	unsigned num_pixels
+extern ledscape_t * ledscape_init(
+unsigned num_pixels
 );
 
-extern ledscape_t *
-ledscape_init_with_modes(
+extern ledscape_t * ledscape_init_with_programs(
 	unsigned num_pixels,
-	ledscape_output_mode_t pru0_mode,
-	ledscape_output_mode_t pru1_mode
+	const char* pru0_program_filename,
+	const char* pru1_program_filename
 );
 
 
@@ -111,9 +109,5 @@ extern void
 ledscape_close(
 	ledscape_t * const leds
 );
-
-
-extern const char* ledscape_output_mode_to_string(ledscape_output_mode_t mode);
-extern const ledscape_output_mode_t ledscape_output_mode_from_string(const char* input);
 
 #endif

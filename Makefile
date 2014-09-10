@@ -2,16 +2,15 @@
 #
 # The top level targets link in the two .o files for now.
 #
-TARGETS += rgb-test
-TARGETS += udp-rx
-TARGETS += opc-rx
 TARGETS += opc-server
 
 LEDSCAPE_OBJS = ledscape.o pru.o util.o lib/cesanta/frozen.o lib/cesanta/mongoose.o
 LEDSCAPE_LIB := libledscape.a
 
-all: $(TARGETS) nop_0.bin nop_1.bin ws281x_0.bin ws281x_1.bin dmx_0.bin ws2801_0.bin ws2801_1.bin ws2801_newpins_0.bin ws2801_newpins_1.bin
+PRU_TEMPLATES := $(wildcard pru/templates/*.p)
+EXPANDED_PRU_TEMPLATES := $(notdir $(PRU_TEMPLATES:.p=.template))
 
+all: $(TARGETS) $(PRU_TEMPLATES) all_pru_binaries
 
 ifeq ($(shell uname -m),armv7l)
 # We are on the BeagleBone Black itself;
@@ -73,10 +72,20 @@ LDLIBS += $(APP_LOADER_LIB) -lm
 PASM_DIR ?= ./am335x/pasm
 PASM := $(PASM_DIR)/pasm
 
+%.template:
+	$(eval TEMPLATE_NAME := $(basename $@))
+	pru/build_template.sh $(TEMPLATE_NAME)
+	$(MAKE) $(TEMPLATE_NAME).template_binaries
+
+%.template_binaries: $(addsuffix .bin,$(basename $(wildcard pru/generated/$(basename $@)*.p)))
+	echo Making Binaries
+
+all_pru_binaries: $(EXPANDED_PRU_TEMPLATES)
+
 %.bin: %.p $(PASM)
-	$(CPP) - < $< | perl -p -e 's/^#.*//; s/;/\n/g; s/BYTE\((\d+)\)/t\1/g' > $<.i
-	$(PASM) -V3 -b $<.i $(basename $@)
-	$(RM) $<.i
+	cd `dirname $@` && gcc -E - < $(notdir $<) | perl -p -e 's/^#.*//; s/;/\n/g; s/BYTE\((\d+)\)/t\1/g' > $(notdir $<).i
+	$(PASM) -V3 -b $<.i pru/bin/$(notdir $(basename $@))
+	#$(RM) $<.i
 
 %.o: %.c
 	$(COMPILE.o)
@@ -100,7 +109,8 @@ clean:
 		*.bin \
 		lib/cesanta/.*.o.d \
 		lib/cesanta/*.i \
-		lib/cesanta/*.o
+		lib/cesanta/*.o \
+		pru/generated/*
 
 ###########
 #

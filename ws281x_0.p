@@ -290,6 +290,7 @@ WORD_LOOP:
 		// Load 16 registers of data, starting at r10
 		LBBO r10, r0, 0, 16*4
 		MOV gpio0_zeros, 0
+		MOV gpio1_zeros, 0
 
 		TEST_BIT(r10, gpio0, bit0)
 		TEST_BIT(r11, gpio0, bit1)
@@ -306,8 +307,6 @@ WORD_LOOP:
 		TEST_BIT(r22, gpio0, bit12)
 		TEST_BIT(r23, gpio0, bit13)
 		TEST_BIT(r24, gpio0, bit14)
-
-		MOV gpio1_zeros, 0
 		TEST_BIT(r25, gpio1, bit0)
 
 		// Load 8 more registers of data

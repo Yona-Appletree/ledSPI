@@ -130,67 +130,7 @@ bitsUsedByBank.forEach(function(usedInBank, bankNum){
 	});
 });
 
-var newToOldMapping = {
-	"40": 13,
-	"42": 14,
-	"44": 19,
-	"46": 1,
-	"32": 20,
-	"35": 45,
-	"37": 44,
-	"38": 8,
-
-	"41": 23,
-	"43": 21,
-	"45": 22,
-	"47": 0,
-	"33": 7,
-	"34": 47,
-	"36": 46,
-	"39": 2,
-
-	"24": 25,
-	"25": 28,
-	"26": 16,
-	"27": 10,
-	"28": 18,
-	"29": 12,
-	"30": 9,
-	"31": 41,
-	"16": 42,
-	"17": 5,
-	"18": 4,
-	"19": 3,
-	"20": 37,
-	"21": 35,
-	"22": 33,
-	"23": 31,
-	"8": 29,
-
-	"7": 26,
-	"6": 27,
-	"5": 15,
-	"4": 11,
-	"3": 17,
-	"2": 24,
-	"1": 43,
-	"0": 6,
-	"15": 40,
-	"14": 39,
-	"13": 38,
-	"12": 36,
-	"11": 34,
-	"10": 32,
-	"9": 30
-};
-
-console.info("");
-console.info("New layout GPIO mapping:");
-for (var i = 0; i<totalUsedPinCount; i++) {
-	pinsByPruChannel[newToOldMapping[i]].newChannelIndex = i;
-	console.info(i + ": " + pinsByPruChannel[newToOldMapping[i]].gpioName);
-}
-console.info("");
+var pinsByMappedChannelIndex = [];
 
 var p8verified = [ // p8
 	0,  0, // 1
@@ -288,7 +228,7 @@ function endRow() {
 	rowStr = "";
 }
 
-function printTable(title, f) {
+function printPinTable(title, f) {
 	var headerColumnsWidth = defaultCellSize*3 + 8*2;
 	cell(title, Color.brightBlue, headerColumnsWidth*2 + defaultCellSize); 
 	endRow();
@@ -321,11 +261,156 @@ function printTable(title, f) {
 	endRow();
 }
 
-printTable("GPIO: BANK_BIT", function(p){ return p.gpioNum ? p.gpioName : "" });
-printTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
-printTable("Original Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
-printTable("New Channel Index", function(p){ return p.newChannelIndex!=undefined ? p.newChannelIndex : "" });
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Program Commands
+var Commands = {
+	"tables": function(){
+		printPinTable("GPIO: BANK_BIT", function(p){ return p.gpioNum ? p.gpioName : "" });
+		printPinTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
+		printPinTable("Original Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
+		printPinTable("New Channel Index", function(p){ return p.newChannelIndex!=undefined ? p.newChannelIndex : "" });
 
-//printTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
-console.info("Total Used Pins: " + totalVerifiedCount);
-console.info("Total Verified Pins: " + totalUsedPinCount);
+//printPinTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
+		console.info("Total Used Pins: " + totalVerifiedCount);
+		console.info("Total Verified Pins: " + totalUsedPinCount);
+	},
+
+	"pru-headers": function() {
+		function buildRangeHeader(prefix, startIndexInclusive, endIndexExclusive) {
+			var output = "";
+
+			var bankData = [];
+			for (var i=0; i<4; i++) {
+				bankData[i] = {
+					usedPinBitsAndIndexes: [],
+					usePin: function(channelIndex, gpioBit) {
+						this.usedPinBitsAndIndexes.push({ channelIndex: channelIndex, gpioBit: gpioBit });
+						return this.usedPinBitsAndIndexes.length - 1;
+					},
+					pinMaskFor: function(divisor, inverse) {
+						inverse = !! inverse;
+
+						return this.usedPinBitsAndIndexes
+							.filter(function(used){ return (used.channelIndex%divisor==0) != inverse; })
+							.reduce(function(mask, used){ return mask | (1<<used.gpioBit); }, 0)
+					}
+				};
+			}
+
+			for (var channelIndex=startIndexInclusive, relativeIndex=0; channelIndex<endIndexExclusive; channelIndex++, relativeIndex++) {
+				var pin = pinsByMappedChannelIndex[channelIndex];
+				if (pin) {
+					var usedBitIndexInBank = bankData[pin.gpioBank].usePin(channelIndex, pin.gpioBit);
+					output += "#define " + prefix + "gpio" + pin.gpioBank + "_bit" + usedBitIndexInBank + " " + pin.gpioBit + "\n";
+					output += "#define " + prefix + "channel" + relativeIndex + "_bank " + pin.gpioBank + "\n";
+					output += "#define " + prefix + "channel" + relativeIndex + "_bit " + pin.gpioBit + "\n";
+					output += "#define " + prefix + "channel" + relativeIndex + "_usedBit " + usedBitIndexInBank + "\n";
+				}
+			}
+
+			function toHexLiteral(n) {
+				if (n < 0) {
+					n = 0xFFFFFFFF + n + 1;
+				}
+				var s =  n.toString(16).toUpperCase();
+				while (s.length % 8 != 0) {
+					s = "0" + s;
+				}
+				return "0x" + s;
+			}
+
+			output += "\n";
+			bankData.forEach(function(bank, bankIndex){
+				output += "#define " + prefix + "gpio" + bankIndex + "_all_mask " + toHexLiteral(bank.pinMaskFor(1)) + "\n";
+				output += "#define " + prefix + "gpio" + bankIndex + "_even_mask " + toHexLiteral(bank.pinMaskFor(2)) + "\n";
+				output += "#define " + prefix + "gpio" + bankIndex + "_odd_mask " + toHexLiteral(bank.pinMaskFor(2, true)) + "\n";
+			});
+
+			return output;
+		}
+
+		var slashLine = (function(){
+			var s = "";
+			while (s.length < 120) s += "/";
+			return s;
+		})();
+
+		console.info(slashLine);
+		console.info("// Pin Mapping: " + pinMapping.name);
+		console.info(slashLine);
+
+		console.info(slashLine);
+		console.info("// PRU0 Mappings");
+		console.info(buildRangeHeader("pru0_", 0, 24));
+		console.info(slashLine);
+		console.info("\n\n");
+		console.info(slashLine);
+		console.info("// PRU1 Mappings");
+		console.info(buildRangeHeader("pru1_", 24, 48));
+		console.info(slashLine);
+	}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Bootstrap
+var mappingFilename = "identity";
+
+function usage(error) {
+	if (error) {
+		console.error(error);
+		console.info();
+	}
+	console.info("Usage: " + process.execPath + " [-map mappingFile] [tables | pru-headers]");
+	process.exit(error ? -1 : 0);
+}
+
+var commandFunc = Commands.tables;
+process.argv.forEach(function(arg, i) {
+	if (arg === "-h" || arg === "-?") {
+		usage();
+	}
+
+	if (arg === "-map") {
+		if (process.argv.length > i+1) {
+			mappingFilename = process.argv[i + 1];
+		} else {
+			usage("-map requires an argument");
+		}
+	}
+
+	if (arg in Commands) {
+		commandFunc = Commands[arg];
+	}
+});
+
+var fs = require('fs');
+var path = require('path');
+
+// Look for the mapping file in various places... allow the name of the mapping with or without an extension and
+// allow references to the mappings in the relative directory mappings/
+var validPaths = [
+	mappingFilename,
+	mappingFilename + ".json",
+	path.dirname(require.main.filename) + "/mappings/" + mappingFilename,
+	path.dirname(require.main.filename) + "/mappings/" + mappingFilename + ".json"
+].filter(fs.existsSync);
+
+if (validPaths.length == 0) {
+	usage("Could not find mapping: " + mappingFilename);
+}
+
+var pinMapping = JSON.parse(fs.readFileSync(validPaths[0], "utf8"));
+
+process.stderr.write("Using mapping: " + pinMapping.name + " from " + mappingFilename + "\n");
+if (pinMapping.mappedPinNumberToOriginalPinNumberMap) {
+	for (var i = 0; i<totalUsedPinCount; i++) {
+		var pin = pinsByPruChannel[pinMapping.mappedPinNumberToOriginalPinNumberMap[i]];
+		pinsByMappedChannelIndex[i] = pin;
+		pin.mappedChannelIndex = i;
+	}
+
+	commandFunc();
+} else {
+	usage("Invalid mapping file format. No mappedPinNumberToOriginalPinNumberMap field found.");
+}
