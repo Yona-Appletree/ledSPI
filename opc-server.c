@@ -116,7 +116,7 @@ static struct {
 	char json[4096];
 } g_server_config = {
 	.output_mode_name = "ws281x",
-	.output_mapping_name = "v1",
+	.output_mapping_name = "original-ledscape",
 	.tcp_port = 7890,
 	.udp_port = 7890,
 	.leds_per_strip = 176,
@@ -240,24 +240,24 @@ static struct option long_options[] =
 const void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
 	if (strcasecmp(input, "NOP") == 0) {
 		strcpy(g_server_config.output_mode_name, "nop");
-		strcpy(g_server_config.output_mapping_name, "v1");
+		strcpy(g_server_config.output_mapping_name, "original-ledscape");
 	}
 	else if (strcasecmp(input, "DMX") == 0) {
 		strcpy(g_server_config.output_mode_name, "dmx");
-		strcpy(g_server_config.output_mapping_name, "v1");
+		strcpy(g_server_config.output_mapping_name, "original-ledscape");
 	}
 	else if (strcasecmp(input, "WS2801") == 0) {
 		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "v1");
+		strcpy(g_server_config.output_mapping_name, "original-ledscape");
 	}
 	else if (strcasecmp(input, "WS2801_NEWPINS") == 0) {
 		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "v2");
+		strcpy(g_server_config.output_mapping_name, "rgb-123-v2");
 	}
 	else /*if (strcasecmp(input, "WS281x") == 0)*/ {
 		// The default case is to use ws281x
 		strcpy(g_server_config.output_mode_name, "ws281x");
-		strcpy(g_server_config.output_mapping_name, "v1");
+		strcpy(g_server_config.output_mapping_name, "original-ledscape");
 	}
 
 	fprintf(stderr,
@@ -387,7 +387,7 @@ int main(int argc, char ** argv)
 					} else if (option_info.has_arg == optional_argument) {
 						printf("--%s[=<val>], -%c[<val>]\n\t", option_info.name, option_info.val);
 					} else {
-						printf("--%s, -%c\n\t", option_info.name, option_info.val);
+						printf("--%s, -%c\n", option_info.name, option_info.val);
 					}
 
 					switch (option_info.val) {
@@ -398,11 +398,11 @@ int main(int argc, char ** argv)
 						case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 32x32"); break;
 						case 'D':
 							printf("Configures the demo mode which activates when no data arrives for more than 5 seconds. Modes:\n");
-							printf("\t\tnone: Disable demo mode\n");
-							printf("\t\tfade: Display a rainbow fade\n");
-							printf("\t\tid: Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
+							printf("\t- none   Disable demo mode\n");
+							printf("\t- fade   Display a rainbow fade\n");
+							printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
 						break;
-						case 'i': printf("Disables interpolation between frames (choppier output but improvesperformance)"); break;
+						case 'i': printf("Disables interpolation between frames (choppier output but improves performance)"); break;
 						case 't': printf("Disables dithering (choppier output but improves performance)"); break;
 						case 'l': printf("Disables luminance correction (lower color values appear brighter than they should)"); break;
 						case 'L': printf("Sets the exponent of the luminance power function to the given floating point value (default 2)"); break;
@@ -413,15 +413,15 @@ int main(int argc, char ** argv)
 						case '1': printf("[deprecated] Sets the PRU1 program. Use --mode and --mapping instead."); break;
 						case 'm':
 							printf("Sets the output mode:\n");
-							printf("\t\tnop: Disable output; can be useful for debugging\n");
-							printf("\t\tws281x: WS2811/WS2812 output format\n");
-							printf("\t\tws2801: 8-bit SPI (rising clock) output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
-							printf("\t\tdmx: DMX compatible output (does not support RDM)\n");
+							printf("\t- nop      Disable output; can be useful for debugging\n");
+							printf("\t- ws281x   WS2811/WS2812 output format\n");
+							printf("\t- ws2801   WS2801-compatible 8-bit SPI output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
+							printf("\t- dmx      DMX compatible output (does not support RDM)\n");
 						break;
 						case 'M':
 							printf("Sets the pin mapping used:\n");
-							printf("\t\tv1: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
-							printf("\t\tv2: Newer RGB-123 mapping\n");
+							printf("\toriginal-ledscape: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
+							printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
 						break;
 						case 'h': printf("Displays this help message"); break;
 					}

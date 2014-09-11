@@ -135,8 +135,8 @@ ledscape_wait(
 ledscape_t * ledscape_init( unsigned num_pixels ) {
 	return ledscape_init_with_programs(
 		num_pixels,
-		"pru/bin/ws281x-v1-pru0.bin",
-		"pru/bin/ws281x-v1-pru1.bin"
+		"pru/bin/ws281x-original-ledscape-pru0.bin",
+		"pru/bin/ws281x-original-ledscape-pru1.bin"
 	);
 }
 

@@ -316,6 +316,7 @@ WORD_LOOP: // bit_num=0; do { bit_num++; send_bit(); } while (bit_num < 24)
 		TEST_BIT(r15, gpio1, bit6)
 		TEST_BIT(r16, gpio1, bit7)
 		TEST_BIT(r17, gpio1, bit8)
+
 		// DATA MASK CREATED
 		//////////////////////////
 
