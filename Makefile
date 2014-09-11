@@ -8,9 +8,9 @@ LEDSCAPE_OBJS = ledscape.o pru.o util.o lib/cesanta/frozen.o lib/cesanta/mongoos
 LEDSCAPE_LIB := libledscape.a
 
 PRU_TEMPLATES := $(wildcard pru/templates/*.p)
-EXPANDED_PRU_TEMPLATES := $(notdir $(PRU_TEMPLATES:.p=.template))
+EXPANDED_PRU_TEMPLATES := $(addprefix pru/generated/, $(notdir $(PRU_TEMPLATES:.p=.template)))
 
-all: $(TARGETS) $(PRU_TEMPLATES) all_pru_binaries
+all: $(TARGETS) all_pru_templates
 
 ifeq ($(shell uname -m),armv7l)
 # We are on the BeagleBone Black itself;
@@ -72,15 +72,13 @@ LDLIBS += $(APP_LOADER_LIB) -lm
 PASM_DIR ?= ./am335x/pasm
 PASM := $(PASM_DIR)/pasm
 
-%.template:
-	$(eval TEMPLATE_NAME := $(basename $@))
+pru/generated/%.template: pru/templates/%.p
+	$(eval TEMPLATE_NAME := $(basename $(notdir $@)))
+	touch $@
 	pru/build_template.sh $(TEMPLATE_NAME)
-	$(MAKE) $(TEMPLATE_NAME).template_binaries
+	$(MAKE) `ls pru/generated | egrep '^$(TEMPLATE_NAME).*\.p$$' | sed 's/.p$$/.bin/' | sed -E 's/(.*)/pru\/generated\/\1/'`
 
-%.template_binaries: $(addsuffix .bin,$(basename $(wildcard pru/generated/$(basename $@)*.p)))
-	echo Making Binaries
-
-all_pru_binaries: $(EXPANDED_PRU_TEMPLATES)
+all_pru_templates: $(EXPANDED_PRU_TEMPLATES)
 
 %.bin: %.p $(PASM)
 	cd `dirname $@` && gcc -E - < $(notdir $<) | perl -p -e 's/^#.*//; s/;/\n/g; s/BYTE\((\d+)\)/t\1/g' > $(notdir $<).i

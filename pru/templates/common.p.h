@@ -41,7 +41,7 @@
 #define r_data12 r22
 #define r_data13 r23
 #define r_data14 r24
-#define r_data15 r24
+#define r_data15 r25
 
 #define r_gpio0_mask r20
 #define r_gpio1_mask r21
@@ -318,7 +318,7 @@ lab:
  * @param regN The data register to check. Generally one of the r_dataN registers.
  * @param channelIndex Which channel this check is for. Used to determine GPIO bank and bit.
  */
-#define TEST_BIT_ONE(regN,channelIndex) QBBS CONCAT3(channel_,channelIndex,_one_skip), regN, r_bit_num; \
+#define TEST_BIT_ONE(regN,channelIndex) QBBC CONCAT3(channel_,channelIndex,_one_skip), regN, r_bit_num; \
                                         SET CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_ones), CONCAT3(r_,CHANNEL_BANK_NAME(channelIndex),_ones), CHANNEL_BIT(channelIndex); \
                                         CONCAT3(channel_,channelIndex,_one_skip): ;
 
@@ -328,7 +328,7 @@ lab:
  * @param firstChannel The first channel index to load data for. Data for this channel will be loaded into r_data0
  * @param channelCount The number of channels to load data for. Must be <= 16
  */
-#define LOAD_CHANNEL_DATA(firstChannel,channelCount) LBBO r_data0, r_data_addr, PRU_NUM*24*4+firstChannel*4, channelCount*4
+#define LOAD_CHANNEL_DATA(channelsPerPru, firstChannel,channelCount) LBBO r_data0, r_data_addr, PRU_NUM*channelsPerPru*4+firstChannel*4, channelCount*4
 
 // ***************************************
 // *    Global Structure Definitions     *

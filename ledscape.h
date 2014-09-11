@@ -42,14 +42,6 @@ typedef struct {
 	ledscape_pixel_t strip[LEDSCAPE_NUM_STRIPS];
 } __attribute__((__packed__)) ledscape_frame_t;
 
-typedef enum {
-	NOP = 0,
-	WS281x = 1,
-	DMX = 2,
-	WS2801 = 3,
-	WS2801_NEWPINS = 4
-} ledscape_output_mode_t;
-
 typedef struct ws281x_command ws281x_command_t;
 
 typedef struct {

@@ -62,17 +62,43 @@ void* demo_thread(void* threadarg);
 void build_lookup_tables();
 void build_config_json();
 
+
+typedef enum {
+	NONE = 0,
+	FADE = 1,
+	IDENTIFY = 2
+} demo_mode_t;
+
+const char* demo_mode_to_string(demo_mode_t mode) {
+	switch (mode) {
+		case NONE: return "none";
+		case FADE: return "fade";
+		case IDENTIFY: return "id";
+		default: return "INVALID";
+	}
+}
+
+demo_mode_t demo_mode_from_string(const char* str) {
+	if (strcasecmp(optarg, "none") == 0) {
+		return NONE;
+	} else if (strcasecmp(optarg, "id") == 0) {
+		return IDENTIFY;
+	} else {
+		return FADE;
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Data
 static struct {
-	const char* output_mode_name;
-	const char* output_mapping_name;
+	char output_mode_name[512];
+	char output_mapping_name[512];
 
 	uint16_t tcp_port;
 	uint16_t udp_port;
 	uint16_t leds_per_strip;
 	uint16_t used_strip_count;
-	uint8_t demo_enabled;
+	demo_mode_t demo_mode;
 
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
@@ -95,7 +121,7 @@ static struct {
 	.udp_port = 7890,
 	.leds_per_strip = 176,
 	.used_strip_count = LEDSCAPE_NUM_STRIPS,
-	.demo_enabled = TRUE,
+	.demo_mode = FADE,
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
@@ -182,54 +208,56 @@ static struct
 // main()
 static struct option long_options[] =
 {
-    {"tcp-port", optional_argument, NULL, 'p'},
-    {"udp-port", optional_argument, NULL, 'P'},
-    {"count", optional_argument, NULL, 'c'},
-    {"strip-count", optional_argument, NULL, 's'},
-    {"dimensions", optional_argument, NULL, 'd'},
+    {"tcp-port", required_argument, NULL, 'p'},
+    {"udp-port", required_argument, NULL, 'P'},
+    {"count", required_argument, NULL, 'c'},
+    {"strip-count", required_argument, NULL, 's'},
+    {"dimensions", required_argument, NULL, 'd'},
 
-    {"no-demo", no_argument, NULL, 'D'},
+    {"demo-mode", required_argument, NULL, 'D'},
 
     {"no-interpolation", no_argument, NULL, 'i'},
     {"no-dithering", no_argument, NULL, 't'},
     {"no-lut", no_argument, NULL, 'l'},
 
-    {"lum_power", optional_argument, NULL, 'L'},
+    {"help", no_argument, NULL, 'h'},
 
-    {"red_bal", optional_argument, NULL, 'r'},
-    {"green_bal", optional_argument, NULL, 'g'},
-    {"blue_bal", optional_argument, NULL, 'b'},
+    {"lum_power", required_argument, NULL, 'L'},
 
-    {"pru0_mode", optional_argument, NULL, '0'},
-    {"pru1_mode", optional_argument, NULL, '1'},
+    {"red_bal", required_argument, NULL, 'r'},
+    {"green_bal", required_argument, NULL, 'g'},
+    {"blue_bal", required_argument, NULL, 'b'},
 
-    {"mode", optional_argument, NULL, 'm'},
-    {"mapping", optional_argument, NULL, 'M'},
+    {"pru0_mode", required_argument, NULL, '0'},
+    {"pru1_mode", required_argument, NULL, '1'},
+
+    {"mode", required_argument, NULL, 'm'},
+    {"mapping", required_argument, NULL, 'M'},
 
     {NULL, 0, NULL, 0}
 };
 
 const void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
 	if (strcasecmp(input, "NOP") == 0) {
-		g_server_config.output_mode_name = "nop";
-		g_server_config.output_mapping_name = "v1";
+		strcpy(g_server_config.output_mode_name, "nop");
+		strcpy(g_server_config.output_mapping_name, "v1");
 	}
 	else if (strcasecmp(input, "DMX") == 0) {
-		g_server_config.output_mode_name = "dmx";
-		g_server_config.output_mapping_name = "v1";
+		strcpy(g_server_config.output_mode_name, "dmx");
+		strcpy(g_server_config.output_mapping_name, "v1");
 	}
 	else if (strcasecmp(input, "WS2801") == 0) {
-		g_server_config.output_mode_name = "ws2801";
-		g_server_config.output_mapping_name = "v1";
+		strcpy(g_server_config.output_mode_name, "ws2801");
+		strcpy(g_server_config.output_mapping_name, "v1");
 	}
 	else if (strcasecmp(input, "WS2801_NEWPINS") == 0) {
-		g_server_config.output_mode_name = "ws2801";
-		g_server_config.output_mapping_name = "v2";
+		strcpy(g_server_config.output_mode_name, "ws2801");
+		strcpy(g_server_config.output_mapping_name, "v2");
 	}
 	else /*if (strcasecmp(input, "WS281x") == 0)*/ {
 		// The default case is to use ws281x
-		g_server_config.output_mode_name = "ws281x";
-		g_server_config.output_mapping_name = "v1";
+		strcpy(g_server_config.output_mode_name, "ws281x");
+		strcpy(g_server_config.output_mapping_name, "v1");
 	}
 
 	fprintf(stderr,
@@ -241,12 +269,32 @@ const void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* inp
 	);
 }
 
+void print_usage(char ** argv) {
+	printf("Usage: %s ", argv[0]);
+
+	int option_count = sizeof(long_options) / sizeof(struct option);
+	for (int option_index = 0; option_index < option_count; option_index++) {
+		struct option option_info = long_options[option_index];
+
+		if (option_info.name != NULL) {
+			if (option_info.has_arg == required_argument) {
+				printf("[--%s <val> | -%c <val>] ", option_info.name, option_info.val);
+			} else if (option_info.has_arg == optional_argument) {
+				printf("[--%s[=<val>] | -%c[<val>] ", option_info.name, option_info.val);
+			} else {
+				printf("[--%s | -%c] ", option_info.name, option_info.val);
+			}
+		}
+	}
+
+	printf("\n");
+}
 
 int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:DitlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -278,7 +326,7 @@ int main(int argc, char ** argv)
 		} break;
 
 		case 'D': {
-			g_server_config.demo_enabled = FALSE;
+			g_server_config.demo_mode = demo_mode_from_string(optarg);
 		} break;
 
 		case 'i': {
@@ -318,18 +366,77 @@ int main(int argc, char ** argv)
 		} break;
 
 		case 'm': {
-			g_server_config.output_mode_name = optarg;
+			strlcpy(g_server_config.output_mode_name, optarg, sizeof(g_server_config.output_mode_name));
 		} break;
 
 		case 'M': {
-			g_server_config.output_mapping_name = optarg;
+			strlcpy(g_server_config.output_mapping_name, optarg, sizeof(g_server_config.output_mapping_name));
+		} break;
+
+		case 'h': {
+			print_usage(argv);
+
+			printf("\n");
+
+			int option_count = sizeof(long_options) / sizeof(struct option);
+			for (int option_index = 0; option_index < option_count; option_index++) {
+				struct option option_info = long_options[option_index];
+				if (option_info.name != NULL) {
+					if (option_info.has_arg == required_argument) {
+						printf("--%s <val>, -%c <val>\n\t", option_info.name, option_info.val);
+					} else if (option_info.has_arg == optional_argument) {
+						printf("--%s[=<val>], -%c[<val>]\n\t", option_info.name, option_info.val);
+					} else {
+						printf("--%s, -%c\n\t", option_info.name, option_info.val);
+					}
+
+					switch (option_info.val) {
+						case 'p': printf("The TCP port to listen for OPC data on"); break;
+						case 'P': printf("The UDP port to listen for OPC data on"); break;
+						case 'c': printf("The number of pixels connected to each output channel"); break;
+						case 's': printf("The number of used output channels (improves performance by not interpolating/dithering unused channels)"); break;
+						case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 32x32"); break;
+						case 'D':
+							printf("Configures the demo mode which activates when no data arrives for more than 5 seconds. Modes:\n");
+							printf("\t\tnone: Disable demo mode\n");
+							printf("\t\tfade: Display a rainbow fade\n");
+							printf("\t\tid: Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
+						break;
+						case 'i': printf("Disables interpolation between frames (choppier output but improvesperformance)"); break;
+						case 't': printf("Disables dithering (choppier output but improves performance)"); break;
+						case 'l': printf("Disables luminance correction (lower color values appear brighter than they should)"); break;
+						case 'L': printf("Sets the exponent of the luminance power function to the given floating point value (default 2)"); break;
+						case 'r': printf("Sets the red balance to the given floating point number (0-1, default .9)"); break;
+						case 'g': printf("Sets the red balance to the given floating point number (0-1, default 1)"); break;
+						case 'b': printf("Sets the red balance to the given floating point number (0-1, default 1)"); break;
+						case '0': printf("[deprecated] Sets the PRU0 program. Use --mode and --mapping instead."); break;
+						case '1': printf("[deprecated] Sets the PRU1 program. Use --mode and --mapping instead."); break;
+						case 'm':
+							printf("Sets the output mode:\n");
+							printf("\t\tnop: Disable output; can be useful for debugging\n");
+							printf("\t\tws281x: WS2811/WS2812 output format\n");
+							printf("\t\tws2801: 8-bit SPI (rising clock) output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
+							printf("\t\tdmx: DMX compatible output (does not support RDM)\n");
+						break;
+						case 'M':
+							printf("Sets the pin mapping used:\n");
+							printf("\t\tv1: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
+							printf("\t\tv2: Newer RGB-123 mapping\n");
+						break;
+						case 'h': printf("Displays this help message"); break;
+					}
+
+					printf("\n");
+				}
+			}
+			printf("\n");
+			exit(EXIT_SUCCESS);
 		} break;
 
 		default:
-			fprintf(stderr, "Usage: %s [-p <port>] [-s <strip_count>] [-c <led_count> | -d <width>x<height>] [-D | --no-demo]"
-			    "[-i | --no-interpolation] [-t | --no-dithering] [-l | --no-lut] [-L | lum_power <lum_power>] "
-				"[-r | -red_bal <red_bal>] [-g | -green_bal <green_bal>] [-b | -blue_bal <blue_bal>"
-				"[-0 <NOP,WS281x,DMX,WS2801,WS2801_NEWPINS>] [-1 <NOP,WS281x,DMX,WS2801,WS2801_NEWPINS>]\n", argv[0]);
+			printf("Invalid option: %c\n\n", opt);
+			print_usage(argv);
+			printf("\nUse -h or --help for more information\n\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -348,7 +455,7 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
 
-	if (g_server_config.demo_enabled) {
+	if (g_server_config.demo_mode != NONE) {
 		printf("[main] Demo Mode Enabled\n");
 		pthread_create(&g_threads.demo_thread, NULL, demo_thread, NULL);
 	} else {
@@ -942,32 +1049,32 @@ void* demo_thread(void* unused_data)
 	for (uint16_t i = 0; /*ever*/; i+=400) {
 		// Calculate time since last remote data
 		pthread_mutex_lock(&g_frame_data.mutex);
-		gettimeofday(&now_tv, NULL);
-		timersub(&now_tv, &g_frame_data.last_remote_data_tv, &delta_tv);
+			gettimeofday(&now_tv, NULL);
+			timersub(&now_tv, &g_frame_data.last_remote_data_tv, &delta_tv);
 		pthread_mutex_unlock(&g_frame_data.mutex);
+
+		pthread_mutex_lock(&g_server_config.mutex);
+			uint32_t leds_per_strip = g_server_config.leds_per_strip;
+			uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_NUM_STRIPS;
+			demo_mode_t demo_mode = g_server_config.demo_mode;
+		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Enable/disable demo mode and log
 		if (delta_tv.tv_sec > 5) {
 			if (! demo_enabled) {
-				printf("[demo] Starting Demo\n");
+				printf("[demo] Starting Demo: %s\n", demo_mode_to_string(demo_mode));
 			}
 
 			demo_enabled = TRUE;
 		} else {
 			if (demo_enabled) {
-				printf("[demo] Stopping Demo\n");
+				printf("[demo] Stopping Demo: %s\n", demo_mode_to_string(demo_mode));
 			}
 
 			demo_enabled = FALSE;
 		}
 
 		if (demo_enabled) {
-			// Demo mode
-			pthread_mutex_lock(&g_server_config.mutex);
-			uint32_t leds_per_strip = g_server_config.leds_per_strip;
-			uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_NUM_STRIPS;
-			pthread_mutex_unlock(&g_server_config.mutex);
-
 			if (buffer_size != channel_count) {
 				if (buffer != NULL) free(buffer);
 				buffer = malloc(buffer_size = channel_count);
@@ -978,16 +1085,19 @@ void* demo_thread(void* unused_data)
 			{
 				for (uint16_t p = 0 ; p < leds_per_strip; p++, data_index+=3)
 				{
-					HSBtoRGB(
-						((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
-						200,
-						128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
-						&buffer[data_index]
-					);
-//
-//					buffer[data_index] = strip;
-//					buffer[data_index+2] = strip;
-//					buffer[data_index+1] = strip;
+					if (demo_mode == IDENTIFY) {
+						// Set the pixel to the strip index unless the pixel has the same index as the strip, then
+						// light it up grey with bit value: 1010 1010
+						buffer[data_index] = buffer[data_index+1] = buffer[data_index+2]
+							= (strip == p) ? 170 : strip;
+					} else if (demo_mode == FADE) {
+						HSBtoRGB(
+							((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
+							200,
+							128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
+							&buffer[data_index]
+						);
+					}
 				}
 			}
 

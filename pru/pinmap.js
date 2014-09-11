@@ -301,10 +301,12 @@ var Commands = {
 				var pin = pinsByMappedChannelIndex[channelIndex];
 				if (pin) {
 					var usedBitIndexInBank = bankData[pin.gpioBank].usePin(channelIndex, pin.gpioBit);
+					output += "// --- Channel " + channelIndex + " ---\n";
 					output += "#define " + prefix + "gpio" + pin.gpioBank + "_bit" + usedBitIndexInBank + " " + pin.gpioBit + "\n";
 					output += "#define " + prefix + "channel" + relativeIndex + "_bank " + pin.gpioBank + "\n";
 					output += "#define " + prefix + "channel" + relativeIndex + "_bit " + pin.gpioBit + "\n";
 					output += "#define " + prefix + "channel" + relativeIndex + "_usedBit " + usedBitIndexInBank + "\n";
+					output += "\n";
 				}
 			}
 

@@ -92,73 +92,53 @@ l_word_loop:
 	l_bit_loop:
 		DECREMENT r_bit_num
 
-		// Load 16 registers of data, starting at r10
-		LOAD_CHANNEL_DATA(24, 0, 16)
-
 		// Zero out the registers
-		RESET_GPIO_ZEROS()
+		RESET_GPIO_ONES()
 
-		TEST_BIT_ZERO(r_data0,  0)
-		TEST_BIT_ZERO(r_data1,  1)
-		TEST_BIT_ZERO(r_data2,  2)
-		TEST_BIT_ZERO(r_data3,  3)
-		TEST_BIT_ZERO(r_data4,  4)
-		TEST_BIT_ZERO(r_data5,  5)
-		TEST_BIT_ZERO(r_data6,  6)
-		TEST_BIT_ZERO(r_data7,  7)
+		///////////////////////////////////////////////////////////////////////
+		// Load 12 registers of data into r10-r21
 
-		TEST_BIT_ZERO(r_data8,  8)
-		TEST_BIT_ZERO(r_data9,  9)
-		TEST_BIT_ZERO(r_data10, 10)
-		TEST_BIT_ZERO(r_data11, 11)
-		TEST_BIT_ZERO(r_data12, 12)
-		TEST_BIT_ZERO(r_data13, 13)
+		LOAD_CHANNEL_DATA(12, 0, 12)
 
-		TEST_BIT_ZERO(r_data14, 14)
-		TEST_BIT_ZERO(r_data15, 15)
+		// Test for ones
+		TEST_BIT_ONE(r_data0,  0)
+		TEST_BIT_ONE(r_data1,  2)
+		TEST_BIT_ONE(r_data2,  4)
+		TEST_BIT_ONE(r_data3,  6)
+		TEST_BIT_ONE(r_data4,  8)
+		TEST_BIT_ONE(r_data5,  10)
+		TEST_BIT_ONE(r_data6,  12)
+		TEST_BIT_ONE(r_data7,  14)
+		TEST_BIT_ONE(r_data8,  16)
+		TEST_BIT_ONE(r_data9,  18)
+		TEST_BIT_ONE(r_data10, 20)
+		TEST_BIT_ONE(r_data11, 22)
 
-		// Load 8 more registers of data
-		LOAD_CHANNEL_DATA(24, 16, 8)
 		// Data loaded
+		///////////////////////////////////////////////////////////////////////
 
-		// Load the address(es) of the GPIO devices
+		///////////////////////////////////////////////////////////////////////
+		// Send the bits
+
+		// Clock and Data LOW
+		PREP_GPIO_ADDRS_FOR_CLEAR()
 		PREP_GPIO_MASK_NAMED(all)
-
-		// Clear lines from last bit
-		PREP_GPIO_ADDRS_FOR_CLEAR()
-
-		WAITNS 900, wait_one_time
 		GPIO_APPLY_MASK_TO_ADDR()
 
+		// Data 1s HIGH
 		PREP_GPIO_ADDRS_FOR_SET()
+		GPIO_APPLY_ONES_TO_ADDR()
 
-		// Wait until the end of the frame (including the time it takes to reset the counter)
-		WAITNS 1150, wait_frame_spacing_time
-		RESET_COUNTER
-
-		// Send all the start bits
+		// Clocks HIGH
+		PREP_GPIO_ADDRS_FOR_SET()
+		PREP_GPIO_MASK_NAMED(odd)
 		GPIO_APPLY_MASK_TO_ADDR()
 
-		// Prepare to lower the zero bit lines
-		PREP_GPIO_ADDRS_FOR_CLEAR()
+		// Bits sent
+		///////////////////////////////////////////////////////////////////////
 
-		// Test some more bits to pass the time
-		TEST_BIT_ZERO(r_data0, 16)
-		TEST_BIT_ZERO(r_data1, 17)
-		TEST_BIT_ZERO(r_data2, 18)
-		TEST_BIT_ZERO(r_data3, 19)
-		TEST_BIT_ZERO(r_data4, 20)
-		TEST_BIT_ZERO(r_data5, 21)
-		TEST_BIT_ZERO(r_data6, 22)
-		TEST_BIT_ZERO(r_data7, 23)
-
-		WAITNS 240, wait_zero_time
-
-		// Lower the zero bit lines
-		GPIO_APPLY_ZEROS_TO_ADDR()
-
-		// The one bits are lowered in the next iteration of the loop
 		QBNE l_bit_loop, r_bit_num, 0
+	//end l_bit_loop
 
 	// The RGB streams have been clocked out
 	// Move to the next pixel on each row
