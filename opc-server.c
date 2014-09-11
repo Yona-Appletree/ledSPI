@@ -395,7 +395,7 @@ int main(int argc, char ** argv)
 						case 'P': printf("The UDP port to listen for OPC data on"); break;
 						case 'c': printf("The number of pixels connected to each output channel"); break;
 						case 's': printf("The number of used output channels (improves performance by not interpolating/dithering unused channels)"); break;
-						case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 32x32"); break;
+						case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 16x16 (256 pixels)"); break;
 						case 'D':
 							printf("Configures the demo mode which activates when no data arrives for more than 5 seconds. Modes:\n");
 							printf("\t- none   Disable demo mode\n");
@@ -534,6 +534,7 @@ void build_config_json() {
 		"{\n"
 			"\t" "\"outputMode\": \"%s\"," "\n"
 			"\t" "\"outputMapping\": \"%s\"," "\n"
+			"\t" "\"demoMode\": \"%s\"," "\n"
 
 			"\t" "\"ledsPerStrip\": %d," "\n"
 			"\t" "\"usedStripCount\": %d," "\n"
@@ -555,6 +556,8 @@ void build_config_json() {
 
 		g_server_config.output_mode_name,
 		g_server_config.output_mapping_name,
+
+		demo_mode_to_string(g_server_config.demo_mode),
 
 		g_server_config.leds_per_strip,
 		g_server_config.used_strip_count,

@@ -1,7 +1,7 @@
 {
-	"id": "newpins",
-	"name": "NewPins (48 port cape)",
-	"description": "Pin mapping used by newer RGB123 capes",
+	"id": "rgb-123-v2",
+	"name": "RGB-123 v2",
+	"description": "RGB-123 Mapping Used for: RGBCape24C, RGBCape48C",
 	"mappedPinNumberToOriginalPinNumberMap": {
 		"40": 13,
 		"42": 14,

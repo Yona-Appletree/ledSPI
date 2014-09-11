@@ -1,7 +1,7 @@
 {
-	"id": "identity",
-	"name": "Identity",
-	"description": "Pin mapping identity; the 'native' (original) pin mapping supported by LEDscape",
+	"id": "original-ledscape",
+	"name": "Original LEDscape",
+	"description": "Original LEDscape mapping; Used by RGB-123 models: RJ45CapeA, RGBCape24A, RGBCape48A",
 	"mappedPinNumberToOriginalPinNumberMap": {
 		"0": "0",
 		"1": "1",
