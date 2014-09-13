@@ -14,7 +14,7 @@ for MAPPING_NAME in $(cd "$MAPPING_DIR"; ls *.json|sed s/.json$//); do
 	echo "  - Building permutation for mapping $MAPPING_NAME"
 
 	echo "    - Generating mapping headers..."
-	node pinmap.js $PROGRAM_NAME -map $MAPPING_NAME pru-headers > $OUTPUT_DIR/mapping-$MAPPING_NAME-p.h || exit -1
+	node pinmap.js $PROGRAM_NAME --mapping $MAPPING_NAME pru-headers > $OUTPUT_DIR/mapping-$MAPPING_NAME-p.h || exit -1
 
 	echo "    - Applying template..."
 

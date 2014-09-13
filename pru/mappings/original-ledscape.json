@@ -1,7 +1,12 @@
 {
 	"id": "original-ledscape",
 	"name": "Original LEDscape",
-	"description": "Original LEDscape mapping; Used by RGB-123 models: RJ45CapeA, RGBCape24A, RGBCape48A",
+	"description": "Original LEDscape mapping",
+	"cape-support": [
+		{ "org": "rgb-123", "id": "RJ45CapeA" },
+		{ "org": "rgb-123", "id": "RGBCape24A" },
+		{ "org": "rgb-123", "id": "RGBCape48A" }
+	],
 	"mappedPinNumberToOriginalPinNumberMap": {
 		"0": "0",
 		"1": "1",

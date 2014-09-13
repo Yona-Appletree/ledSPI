@@ -268,11 +268,15 @@ var Commands = {
 		printPinTable("GPIO: BANK_BIT", function(p){ return p.gpioNum ? p.gpioName : "" });
 		printPinTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
 		printPinTable("Original Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
-		printPinTable("New Channel Index", function(p){ return p.newChannelIndex!=undefined ? p.newChannelIndex : "" });
+		printPinTable("Mapped Channel Index", function(p){ return p.mappedChannelIndex!=undefined ? p.mappedChannelIndex : "" });
 
 //printPinTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
 		console.info("Total Used Pins: " + totalVerifiedCount);
 		console.info("Total Verified Pins: " + totalUsedPinCount);
+	},
+
+	"pinout": function(){
+		printPinTable("Internal Channel Index", function(p){ return p.mappedChannelIndex!=undefined ? p.mappedChannelIndex : "" });
 	},
 
 	"pru-headers": function() {
@@ -356,28 +360,28 @@ var Commands = {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Bootstrap
-var mappingFilename = "identity";
+var mappingFilename = "original-ledscape";
 
 function usage(error) {
 	if (error) {
 		console.error(error);
 		console.info();
 	}
-	console.info("Usage: " + process.execPath + " [-map mappingFile] [tables | pru-headers]");
+	console.info("Usage: " + process.execPath + " [--mapping mappingFile] [tables | pru-headers]");
 	process.exit(error ? -1 : 0);
 }
 
-var commandFunc = Commands.tables;
+var commandFunc = Commands.pinout;
 process.argv.forEach(function(arg, i) {
 	if (arg === "-h" || arg === "-?") {
 		usage();
 	}
 
-	if (arg === "-map") {
+	if (arg === "--mapping") {
 		if (process.argv.length > i+1) {
 			mappingFilename = process.argv[i + 1];
 		} else {
-			usage("-map requires an argument");
+			usage(arg + " requires an argument");
 		}
 	}
 

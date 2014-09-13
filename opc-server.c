@@ -90,15 +90,16 @@ demo_mode_t demo_mode_from_string(const char* str) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Data
-static struct {
+typedef struct {
 	char output_mode_name[512];
 	char output_mapping_name[512];
+
+	demo_mode_t demo_mode;
 
 	uint16_t tcp_port;
 	uint16_t udp_port;
 	uint16_t leds_per_strip;
 	uint16_t used_strip_count;
-	demo_mode_t demo_mode;
 
 	uint8_t interpolation_enabled;
 	uint8_t dithering_enabled;
@@ -114,14 +115,18 @@ static struct {
 
 	pthread_mutex_t mutex;
 	char json[4096];
-} g_server_config = {
+} server_config_t;
+
+server_config_t g_server_config = {
 	.output_mode_name = "ws281x",
 	.output_mapping_name = "original-ledscape",
+
+	.demo_mode = FADE,
+
 	.tcp_port = 7890,
 	.udp_port = 7890,
 	.leds_per_strip = 176,
 	.used_strip_count = LEDSCAPE_NUM_STRIPS,
-	.demo_mode = FADE,
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
@@ -511,7 +516,6 @@ const char* build_pru_program_name(uint8_t pruNum) {
 void start_server() {
 	printf("[main] Starting server...");
 
-
 	// Setup tables
 	build_lookup_tables();
 	ensure_frame_data();
@@ -523,14 +527,38 @@ void start_server() {
 		build_pru_program_name(1)
 	);
 
-	build_config_json();
-	fprintf(stderr, g_server_config.json);
+	// Display server config as JSON
+	char json_buffer[4096];
+	server_config_to_json(json_buffer, &g_server_config);
+	fputs(stderr, json_buffer);
 }
 
-void build_config_json() {
+uint32_t validate_server_config(server_config_t input_config) {
+
+}
+
+int server_config_from_json(const char* json, server_config_t* output_config) {
+	struct json_token *json_tokens, *token;
+
+	// Tokenize json string, fill in tokens array
+	json_tokens = parse_json2(json, strlen(json));
+
+	// Search for parameter "bar" and print it's value
+	if (token = find_json_token(json_tokens, "outputMode")) {
+
+	}
+
+	// Do not forget to free allocated tokens array
+	free(json_tokens);
+
+	return 0;
+}
+
+void server_config_to_json(char* dest_string, server_config_t* input_config) {
 	// Build config JSON
 	sprintf(
-		g_server_config.json,
+		dest_string,
+
 		"{\n"
 			"\t" "\"outputMode\": \"%s\"," "\n"
 			"\t" "\"outputMapping\": \"%s\"," "\n"
@@ -554,25 +582,25 @@ void build_config_json() {
 			"\t" "}" "\n"
 		"}\n",
 
-		g_server_config.output_mode_name,
-		g_server_config.output_mapping_name,
+		input_config->output_mode_name,
+		input_config->output_mapping_name,
 
-		demo_mode_to_string(g_server_config.demo_mode),
+		demo_mode_to_string(input_config->demo_mode),
 
-		g_server_config.leds_per_strip,
-		g_server_config.used_strip_count,
+		input_config->leds_per_strip,
+		input_config->used_strip_count,
 
-		g_server_config.tcp_port,
-		g_server_config.udp_port,
+		input_config->tcp_port,
+		input_config->udp_port,
 
-		g_server_config.interpolation_enabled ? "true" : "false",
-		g_server_config.dithering_enabled ? "true" : "false",
-		g_server_config.lut_enabled ? "true" : "false",
+		input_config->interpolation_enabled ? "true" : "false",
+		input_config->dithering_enabled ? "true" : "false",
+		input_config->lut_enabled ? "true" : "false",
 
-		(double)g_server_config.lum_power,
-		(double)g_server_config.white_point.red,
-		(double)g_server_config.white_point.green,
-		(double)g_server_config.white_point.blue
+		(double)input_config->lum_power,
+		(double)input_config->white_point.red,
+		(double)input_config->white_point.green,
+		(double)input_config->white_point.blue
 	);
 }
 

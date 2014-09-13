@@ -1,7 +1,11 @@
 {
 	"id": "rgb-123-v2",
 	"name": "RGB-123 v2",
-	"description": "RGB-123 Mapping Used for: RGBCape24C, RGBCape48C",
+	"description": "RGB-123 version 2 mapping",
+	"cape-support": [
+		{ "org": "rgb-123", "id": "RGBCape24C" },
+		{ "org": "rgb-123", "id": "RGBCape48C" }
+	],
 	"mappedPinNumberToOriginalPinNumberMap": {
 		"40": 13,
 		"42": 14,
