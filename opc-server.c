@@ -528,9 +528,9 @@ void start_server() {
 	);
 
 	// Display server config as JSON
-	char json_buffer[4096];
+	char json_buffer[4096] = {0};
 	server_config_to_json(json_buffer, &g_server_config);
-	fputs(stderr, json_buffer);
+	fputs(json_buffer, stderr);
 }
 
 uint32_t validate_server_config(server_config_t input_config) {

@@ -22,6 +22,6 @@ pasm: $(OBJS)
 	$(CC) -o $@ $^
 
 clean:
-	$(RM) -f *.o
+	$(RM) -f *.o pasm
 
 

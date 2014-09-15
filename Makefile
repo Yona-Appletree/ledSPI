@@ -109,6 +109,8 @@ clean:
 		lib/cesanta/*.i \
 		lib/cesanta/*.o \
 		pru/generated/*
+	cd am335x/app_loader/interface && $(MAKE) clean
+	cd am335x/pasm && $(MAKE) clean
 
 ###########
 #

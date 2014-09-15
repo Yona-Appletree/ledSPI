@@ -15,11 +15,23 @@
 // Alternatively, you can license this library under a commercial
 // license, as set out in <http://cesanta.com/products.html>.
 
+#define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005+
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "frozen.h"
 
 #ifdef _WIN32
 #define snprintf _snprintf
+#endif
+
+#ifndef FROZEN_REALLOC
+#define FROZEN_REALLOC realloc
+#endif
+
+#ifndef FROZEN_FREE
+#define FROZEN_FREE free
 #endif
 
 struct frozen {
@@ -28,13 +40,14 @@ struct frozen {
   struct json_token *tokens;
   int max_tokens;
   int num_tokens;
+  int do_realloc;
 };
 
 static int parse_object(struct frozen *f);
 static int parse_value(struct frozen *f);
 
 #define EXPECT(cond, err_code) do { if (!(cond)) return (err_code); } while (0)
-#define TRY(expr) do { int n = expr; if (n < 0) return n; } while (0)
+#define TRY(expr) do { int _n = expr; if (_n < 0) return _n; } while (0)
 #define END_OF_STRING (-1)
 
 static int left(const struct frozen *f) {
@@ -87,7 +100,14 @@ static int get_escape_len(const char *s, int len) {
 }
 
 static int capture_ptr(struct frozen *f, const char *ptr, enum json_type type) {
-  if (f->tokens == 0 || f->max_tokens == 0) return 0;
+  if (f->do_realloc && f->num_tokens >= f->max_tokens) {
+    int new_size = f->max_tokens == 0 ? 100 : f->max_tokens * 2;
+    void *p = FROZEN_REALLOC(f->tokens, new_size * sizeof(f->tokens[0]));
+    if (p == NULL) return JSON_TOKEN_ARRAY_TOO_SMALL;
+    f->max_tokens = new_size;
+    f->tokens = (struct json_token *) p;
+  }
+  if (f->tokens == NULL || f->max_tokens == 0) return 0;
   if (f->num_tokens >= f->max_tokens) return JSON_TOKEN_ARRAY_TOO_SMALL;
   f->tokens[f->num_tokens].ptr = ptr;
   f->tokens[f->num_tokens].type = type;
@@ -263,16 +283,29 @@ static int parse_object(struct frozen *f) {
   return 0;
 }
 
+static int doit(struct frozen *f) {
+  if (f->cur == 0 || f->end < f->cur) return JSON_STRING_INVALID;
+  if (f->end == f->cur) return JSON_STRING_INCOMPLETE;
+  TRY(parse_object(f));
+  TRY(capture_ptr(f, f->cur, JSON_TYPE_EOF));
+  capture_len(f, f->num_tokens, f->cur);
+  return 0;
+}
+
 // json = object
 int parse_json(const char *s, int s_len, struct json_token *arr, int arr_len) {
-  struct frozen frozen = { s + s_len, s, arr, arr_len, 0 };
-  if (s == 0 || s_len < 0) return JSON_STRING_INVALID;
-  if (s_len == 0) return JSON_STRING_INCOMPLETE;
-  TRY(parse_object(&frozen));
-  TRY(capture_ptr(&frozen, frozen.cur, JSON_TYPE_EOF));
-  capture_len(&frozen, frozen.num_tokens, frozen.cur);
-
+  struct frozen frozen = { s + s_len, s, arr, arr_len, 0, 0 };
+  TRY(doit(&frozen));
   return frozen.cur - s;
+}
+
+struct json_token *parse_json2(const char *s, int s_len) {
+  struct frozen frozen = { s + s_len, s, NULL, 0, 0, 1 };
+  if (doit(&frozen) < 0) {
+    FROZEN_FREE((void *) frozen.tokens);
+    frozen.tokens = NULL;
+  }
+  return frozen.tokens;
 }
 
 static int path_part_len(const char *p) {
@@ -283,10 +316,8 @@ static int path_part_len(const char *p) {
 
 const struct json_token *find_json_token(const struct json_token *toks,
                                          const char *path) {
-  if (path == 0 || path[0] == '\0') return 0;
-  for (;;) {
+  while (path != 0 && path[0] != '\0') {
     int i, ind2 = 0, ind = -1, skip = 2, n = path_part_len(path);
-    if (path[0] == '\0') return 0;
     if (path[0] == '[') {
       if (toks->type != JSON_TYPE_ARRAY || !is_digit(path[1])) return 0;
       for (ind = 0, n = 1; path[n] != ']' && path[n] != '\0'; n++) {
@@ -330,6 +361,8 @@ int json_emit_double(char *buf, int buf_len, double value) {
 
 int json_emit_quoted_str(char *buf, int buf_len, const char *str) {
   int i = 0, j = 0, ch;
+
+  if (buf_len <= 1) return 0;
 
 #define EMIT(x) do { if (j < buf_len) buf[j++] = x; } while (0)
 
