@@ -113,7 +113,8 @@ Setup
 Once you have LEDscape sending data to your pixels, you will probably
 want to use the `opc-server` server which accepts Open Pixel Control data
 and passes it on to LEDscape. There is an systemd service
-checked in, which can be installed like so:
+checked in. Modify `ledscape.service` to point at your local install directory
+and then run:
 
 	sudo systemctl enable /path/to/LEDscape/ledscape.service
 	sudo systemctl start ledscape

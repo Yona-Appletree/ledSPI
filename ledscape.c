@@ -151,7 +151,7 @@ ledscape_t * ledscape_init_with_programs(
 
 	const size_t frame_size = num_pixels * LEDSCAPE_NUM_STRIPS * 4;
 
-	if (2 *frame_size > pru0->ddr_size)
+	if (2*frame_size > pru0->ddr_size)
 		die("Pixel data needs at least 2 * %zu, only %zu in DDR\n",
 			frame_size,
 			pru0->ddr_size
@@ -210,6 +210,108 @@ ledscape_t * ledscape_init_with_programs(
 }
 
 
+extern void ledscape_set_color(
+	ledscape_frame_t * const frame,
+	color_channel_order_t color_channel_order,
+	uint8_t strip,
+	uint16_t pixel,
+	uint8_t r,
+	uint8_t g,
+	uint8_t b
+) {
+	ledscape_pixel_set_color(
+		&frame[pixel].strip[strip],
+		color_channel_order,
+		r,
+		g,
+		b
+	);
+}
+
+
+extern inline void ledscape_pixel_set_color(
+	ledscape_pixel_t * const out_pixel,
+	color_channel_order_t color_channel_order,
+	uint8_t r,
+	uint8_t g,
+	uint8_t b
+) {
+	switch (color_channel_order) {
+		case COLOR_ORDER_RGB:
+			out_pixel->a = r;
+			out_pixel->b = g;
+			out_pixel->c = b;
+		break;
+
+		case COLOR_ORDER_RBG:
+			out_pixel->a = r;
+			out_pixel->b = b;
+			out_pixel->c = g;
+		break;
+
+		case COLOR_ORDER_GRB:
+			out_pixel->a = g;
+			out_pixel->b = r;
+			out_pixel->c = b;
+		break;
+
+		case COLOR_ORDER_GBR:
+			out_pixel->a = g;
+			out_pixel->b = b;
+			out_pixel->c = r;
+		break;
+
+		case COLOR_ORDER_BGR:
+			out_pixel->a = b;
+			out_pixel->b = g;
+			out_pixel->c = r;
+		break;
+
+		case COLOR_ORDER_BRG:
+			out_pixel->a = b;
+			out_pixel->b = r;
+			out_pixel->c = g;
+		break;
+	}
+}
+
+
+const char* color_channel_order_to_string(color_channel_order_t color_channel_order) {
+	switch (color_channel_order) {
+		case COLOR_ORDER_RGB: return "RGB";
+		case COLOR_ORDER_RBG: return "RBG";
+		case COLOR_ORDER_GRB: return "GRB";
+		case COLOR_ORDER_GBR: return "GBR";
+		case COLOR_ORDER_BGR: return "BGR";
+		case COLOR_ORDER_BRG: return "BRG";
+		default: return  "<invalid color_channel_order>";
+	}
+}
+
+color_channel_order_t color_channel_order_from_string(const char* str) {
+	if (strcasecmp(str, "RGB") == 0) {
+		return COLOR_ORDER_RGB;
+	}
+	else if (strcasecmp(str, "RBG") == 0) {
+		return COLOR_ORDER_RBG;
+	}
+	else if (strcasecmp(str, "GRB") == 0) {
+		return COLOR_ORDER_GRB;
+	}
+	else if (strcasecmp(str, "GBR") == 0) {
+		return COLOR_ORDER_GBR;
+	}
+	else if (strcasecmp(str, "BGR") == 0) {
+		return COLOR_ORDER_BGR;
+	}
+	else if (strcasecmp(str, "BRG") == 0) {
+		return COLOR_ORDER_BRG;
+	}
+	else {
+		return -1;
+	}
+}
+
 void
 ledscape_close(
 	ledscape_t * const leds
@@ -220,21 +322,4 @@ ledscape_close(
 	leds->ws281x_1->command = 0xFF;
 	pru_close(leds->pru0);
 	pru_close(leds->pru1);
-}
-
-
-void
-ledscape_set_color(
-	ledscape_frame_t * const frame,
-	uint8_t strip,
-	uint16_t pixel,
-	uint8_t r,
-	uint8_t g,
-	uint8_t b
-)
-{
-	ledscape_pixel_t * const p = &frame[pixel].strip[strip];
-	p->r = r;
-	p->g = g;
-	p->b = b;
 }

@@ -42,6 +42,50 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
+uint32_t uint32_min(uint32_t a, uint32_t b) { return a < b ? a : b; }
+uint32_t uint32_umax(uint32_t a, uint32_t b) { return a > b ? a : b; }
+
+int32_t int32_min(int32_t a, int32_t b) { return a < b ? a : b; }
+int32_t int32_smax(int32_t a, int32_t b) { return a > b ? a : b; }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// TYPES
+
+typedef enum {
+	NONE = 0,
+	FADE = 1,
+	IDENTIFY = 2
+} demo_mode_t;
+
+typedef struct {
+	char output_mode_name[512];
+	char output_mapping_name[512];
+
+	demo_mode_t demo_mode;
+
+	uint16_t tcp_port;
+	uint16_t udp_port;
+	uint16_t leds_per_strip;
+	uint16_t used_strip_count;
+
+	color_channel_order_t color_channel_order;
+
+	uint8_t interpolation_enabled;
+	uint8_t dithering_enabled;
+	uint8_t lut_enabled;
+
+	struct {
+		float red;
+		float green;
+		float blue;
+	} white_point;
+
+	float lum_power;
+
+	pthread_mutex_t mutex;
+	char json[4096];
+} server_config_t;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Method declarations
 void teardown_server();
@@ -61,61 +105,35 @@ void* demo_thread(void* threadarg);
 // Config Methods
 void build_lookup_tables();
 void build_config_json();
-
-
-typedef enum {
-	NONE = 0,
-	FADE = 1,
-	IDENTIFY = 2
-} demo_mode_t;
+int validate_server_config(
+	server_config_t* input_config,
+	char * result_json_buffer,
+	int result_json_buffer_size
+);
 
 const char* demo_mode_to_string(demo_mode_t mode) {
 	switch (mode) {
 		case NONE: return "none";
 		case FADE: return "fade";
 		case IDENTIFY: return "id";
-		default: return "INVALID";
+		default: return "<invalid demo_mode>";
 	}
 }
 
 demo_mode_t demo_mode_from_string(const char* str) {
-	if (strcasecmp(optarg, "none") == 0) {
+	if (strcasecmp(str, "none") == 0) {
 		return NONE;
-	} else if (strcasecmp(optarg, "id") == 0) {
+	} else if (strcasecmp(str, "id") == 0) {
 		return IDENTIFY;
-	} else {
+	} else if (strcasecmp(str, "fade") == 0) {
 		return FADE;
+	} else {
+		return -1;
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Data
-typedef struct {
-	char output_mode_name[512];
-	char output_mapping_name[512];
-
-	demo_mode_t demo_mode;
-
-	uint16_t tcp_port;
-	uint16_t udp_port;
-	uint16_t leds_per_strip;
-	uint16_t used_strip_count;
-
-	uint8_t interpolation_enabled;
-	uint8_t dithering_enabled;
-	uint8_t lut_enabled;
-
-	struct {
-		float red;
-		float green;
-		float blue;
-	} white_point;
-
-	float lum_power;
-
-	pthread_mutex_t mutex;
-	char json[4096];
-} server_config_t;
 
 server_config_t g_server_config = {
 	.output_mode_name = "ws281x",
@@ -127,9 +145,12 @@ server_config_t g_server_config = {
 	.udp_port = 7890,
 	.leds_per_strip = 176,
 	.used_strip_count = LEDSCAPE_NUM_STRIPS,
+	.color_channel_order = COLOR_ORDER_BRG,
+
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
 	.lut_enabled = TRUE,
+
 	.white_point = { .9, 1, 1},
 	.lum_power = 2,
 	.mutex = PTHREAD_MUTEX_INITIALIZER
@@ -218,6 +239,8 @@ static struct option long_options[] =
     {"count", required_argument, NULL, 'c'},
     {"strip-count", required_argument, NULL, 's'},
     {"dimensions", required_argument, NULL, 'd'},
+
+    {"channel-order", required_argument, NULL, 'o'},
 
     {"demo-mode", required_argument, NULL, 'D'},
 
@@ -334,6 +357,11 @@ int main(int argc, char ** argv)
 			g_server_config.demo_mode = demo_mode_from_string(optarg);
 		} break;
 
+
+		case 'o': {
+			g_server_config.color_channel_order = color_channel_order_from_string(optarg);
+		} break;
+
 		case 'i': {
 			g_server_config.interpolation_enabled = FALSE;
 		} break;
@@ -407,6 +435,9 @@ int main(int argc, char ** argv)
 							printf("\t- fade   Display a rainbow fade\n");
 							printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
 						break;
+						case 'o':
+							printf("Specifies the color channel output order (RGB, RBG, GRB, GBR, BGR or BRG); default is BRG.");
+						break;
 						case 'i': printf("Disables interpolation between frames (choppier output but improves performance)"); break;
 						case 't': printf("Disables dithering (choppier output but improves performance)"); break;
 						case 'l': printf("Disables luminance correction (lower color values appear brighter than they should)"); break;
@@ -446,9 +477,19 @@ int main(int argc, char ** argv)
 		}
 	}
 
-	// largest possible UDP packet
-	if (g_server_config.leds_per_strip*LEDSCAPE_NUM_STRIPS*3 >= 65536) {
-		die("[main] %u pixels cannot fit in a UDP packet.\n", g_server_config.leds_per_strip);
+	// Validate the configuration
+	char validation_output_buffer[1024*1024];
+	if (validate_server_config(
+		& g_server_config,
+		validation_output_buffer,
+		sizeof(validation_output_buffer)
+	) != 0) {
+		fprintf(stderr,
+			"ERROR: Configuration failed validation:\n%s",
+			validation_output_buffer
+		);
+
+		exit(-1);
 	}
 
 	fprintf(stderr,
@@ -489,28 +530,48 @@ void teardown_server() {
 	printf("[main] Teardown Complete.\n");
 }
 
+const char* build_pruN_program_name(
+	const char* output_mode_name,
+	const char* output_mapping_name,
+	uint8_t pruNum,
+	char* out_pru_filename,
+	int filename_len
+) {
+	snprintf(
+		out_pru_filename,
+		filename_len,
+		"pru/bin/%s-%s-pru%d.bin",
+		output_mode_name,
+		output_mapping_name,
+		(int) pruNum
+	);
+
+	return out_pru_filename;
+}
+
 const char* build_pru_program_name(uint8_t pruNum) {
 	char* output_buffer;
 	size_t buffer_size;
 
 	if (pruNum == 0) {
-		output_buffer = g_frame_data.pru0_program_filename;
-		buffer_size = sizeof(g_frame_data.pru0_program_filename);
+		return build_pruN_program_name(
+			g_server_config.output_mode_name,
+			g_server_config.output_mapping_name,
+			0,
+			g_frame_data.pru0_program_filename,
+			sizeof(g_frame_data.pru0_program_filename)
+		);
+	} else if (pruNum == 1) {
+		return build_pruN_program_name(
+			g_server_config.output_mode_name,
+			g_server_config.output_mapping_name,
+			1,
+			g_frame_data.pru1_program_filename,
+			sizeof(g_frame_data.pru1_program_filename)
+		);
 	} else {
-		output_buffer = g_frame_data.pru1_program_filename;
-		buffer_size = sizeof(g_frame_data.pru1_program_filename);
+		return NULL;
 	}
-
-	snprintf(
-		output_buffer,
-		buffer_size,
-		"pru/bin/%s-%s-pru%d.bin",
-		g_server_config.output_mode_name,
-		g_server_config.output_mapping_name,
-		(int) pruNum
-	);
-
-	return output_buffer;
 }
 
 void start_server() {
@@ -533,19 +594,225 @@ void start_server() {
 	fputs(json_buffer, stderr);
 }
 
-uint32_t validate_server_config(server_config_t input_config) {
+int validate_server_config(
+	server_config_t* input_config,
+	char * result_json_buffer,
+	int result_json_buffer_size
+) {
+	strlcpy(result_json_buffer, "{\n\t\"errors\": [", result_json_buffer_size);
+	char path_temp[4096];
 
+	int error_count = 0;
+
+	inline void result_append(const char *format, ...)
+	{
+		snprintf(
+			result_json_buffer + strlen(result_json_buffer),
+			result_json_buffer_size - strlen(result_json_buffer) + 1,
+			format,
+			__builtin_va_arg_pack()
+		);
+	}
+
+	inline void add_error(const char *format, ...)
+	{
+		// Can't call result_append here because it breaks gcc:
+		// internal compiler error: in initialize_inlined_parameters, at tree-inline.c:2795
+		snprintf(
+			result_json_buffer + strlen(result_json_buffer),
+			result_json_buffer_size - strlen(result_json_buffer) + 1,
+			format,
+			__builtin_va_arg_pack()
+		);
+		error_count ++;
+	}
+
+	inline void assert_enum_valid(const char *var_name, int value)
+	{
+		if (value < 0) {
+			add_error(
+				"Invalid %s",
+				var_name
+			);
+		}
+	}
+
+	inline void assert_int_range_inclusive(const char *var_name, int min_val, int max_val, int value)
+	{
+		if (value < min_val || value > max_val) {
+			add_error(
+				"Given %s (%d) is outside of range %d-%d (inclusive)",
+				var_name,
+				value,
+				min_val,
+				max_val
+			);
+		}
+	}
+
+	inline void assert_double_range_inclusive(const char *var_name, double min_val, double max_val, double value)
+	{
+		if (value < min_val || value > max_val) {
+			add_error(
+				"Given %s (%f) is outside of range %f-%f (inclusive)",
+				var_name,
+				value,
+				min_val,
+				max_val
+			);
+		}
+	}
+
+	{ // outputMode and outputMapping
+		for (int pruNum=0; pruNum < 2; pruNum++) {
+			build_pruN_program_name(
+				input_config->output_mode_name,
+				input_config->output_mapping_name,
+				pruNum,
+				path_temp,
+				sizeof(path_temp)
+			);
+
+			int pru0_access = access( path_temp, R_OK );
+
+			if( access( path_temp, R_OK ) == -1 ) {
+				add_error(
+					"\n\t\t\"" "Invalid mapping and/or mode name; cannot access PRU %d program '%s'" "\",",
+					pruNum,
+					path_temp
+				);
+			}
+		}
+	}
+
+	// demoMode
+	assert_enum_valid("Demo Mode", input_config->demo_mode);
+
+	// ledsPerStrip
+	assert_int_range_inclusive("LED Count", 1, 1024, input_config->leds_per_strip);
+
+	// usedStripCount
+	assert_int_range_inclusive("Strip/Channel Count", 1, 48, input_config->used_strip_count);
+
+	// colorChannelOrder
+	assert_enum_valid("Color Channel Order", input_config->color_channel_order);
+
+	// opcTcpPort
+	assert_int_range_inclusive("OPC TCP Port", 1, 65535, input_config->tcp_port);
+
+	// opcUdpPort
+	assert_int_range_inclusive("OPC UDP Port", 1, 65535, input_config->udp_port);
+
+	// lumCurvePower
+	assert_double_range_inclusive("Luminance Curve Power", 0, 10, input_config->lum_power);
+
+	// whitePoint.red
+	assert_double_range_inclusive("Red White Point", 0, 1, input_config->white_point.red);
+
+	// whitePoint.green
+	assert_double_range_inclusive("Geen White Point", 0, 1, input_config->white_point.green);
+
+	// whitePoint.blue
+	assert_double_range_inclusive("Blue White Point", 0, 1, input_config->white_point.blue);
+
+	if (error_count > 0) {
+		// Strip off trailing comma
+		result_json_buffer[strlen(result_json_buffer)-1] = 0;
+		result_append("\n\t],\n");
+	} else {
+		// Reset the output to not include the error messages
+		if (result_json_buffer_size > 0) {
+			result_json_buffer[0] = 0;
+		}
+		result_append("{\n");
+	}
+
+	// Add closing json
+	result_append("\t\"valid\": %s\n", error_count == 0 ? "true" : "false");
+	result_append("}");
+
+	return error_count;
 }
 
 int server_config_from_json(const char* json, server_config_t* output_config) {
 	struct json_token *json_tokens, *token;
+	char token_value[4096];
 
 	// Tokenize json string, fill in tokens array
 	json_tokens = parse_json2(json, strlen(json));
 
 	// Search for parameter "bar" and print it's value
-	if (token = find_json_token(json_tokens, "outputMode")) {
+	if ((token = find_json_token(json_tokens, "outputMode"))) {
+		strlcpy(output_config->output_mode_name, token->ptr, uint32_min(sizeof(g_server_config.output_mode_name), token->len + 1));
+	}
 
+	if ((token = find_json_token(json_tokens, "outputMapping"))) {
+		strlcpy(output_config->output_mapping_name, token->ptr, uint32_min(sizeof(g_server_config.output_mode_name), token->len + 1));
+	}
+
+	if ((token = find_json_token(json_tokens, "demoMode"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->demo_mode = demo_mode_from_string(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "ledsPerStrip"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->leds_per_strip = atoi(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "usedStripCount"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->used_strip_count = atoi(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "colorChannelOrder"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->color_channel_order = color_channel_order_from_string(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "opcTcpPort"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->tcp_port = atoi(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "opcUdpPort"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->udp_port = atoi(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "enableInterpolation"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->interpolation_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+	}
+
+	if ((token = find_json_token(json_tokens, "enableDithering"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->dithering_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+	}
+
+	if ((token = find_json_token(json_tokens, "enableLookupTable"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->lut_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+	}
+
+	if ((token = find_json_token(json_tokens, "lumCurvePower"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->lum_power = atof(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "whitePoint.red"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->white_point.red = atof(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "whitePoint.green"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->white_point.green = atof(token_value);
+	}
+
+	if ((token = find_json_token(json_tokens, "whitePoint.blue"))) {
+		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		output_config->white_point.blue = atof(token_value);
 	}
 
 	// Do not forget to free allocated tokens array
@@ -566,9 +833,10 @@ void server_config_to_json(char* dest_string, server_config_t* input_config) {
 
 			"\t" "\"ledsPerStrip\": %d," "\n"
 			"\t" "\"usedStripCount\": %d," "\n"
+			"\t" "\"colorChannelOrder\": %s," "\n"
 
-			"\t" "\"tcpPort\": %d," "\n"
-			"\t" "\"udpPort\": %d," "\n"
+			"\t" "\"opcTcpPort\": %d," "\n"
+			"\t" "\"opcUdpPort\": %d," "\n"
 
 			"\t" "\"enableInterpolation\": %s," "\n"
 			"\t" "\"enableDithering\": %s," "\n"
@@ -589,6 +857,8 @@ void server_config_to_json(char* dest_string, server_config_t* input_config) {
 
 		input_config->leds_per_strip,
 		input_config->used_strip_count,
+
+		color_channel_order_to_string(input_config->color_channel_order),
 
 		input_config->tcp_port,
 		input_config->udp_port,
@@ -864,6 +1134,9 @@ void* render_thread(void* unused_data)
 		uint8_t dithering_enabled = (delta_avg < 10000) && g_server_config.dithering_enabled;
 		uint8_t interpolation_enabled = g_server_config.interpolation_enabled;
 		uint8_t lut_enabled = g_server_config.lut_enabled;
+
+		color_channel_order_t color_channel_order = g_server_config.color_channel_order;
+
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
@@ -928,9 +1201,17 @@ void* render_thread(void* unused_data)
 				}
 
 				// Calculate and assign output values
-				uint8_t r = pixel_out->r = min((ditheredR+0x80) >> 8, 255);
-				uint8_t g = pixel_out->g = min((ditheredG+0x80) >> 8, 255);
-				uint8_t b = pixel_out->b = min((ditheredB+0x80) >> 8, 255);
+				uint8_t r = min((ditheredR+0x80) >> 8, 255);
+				uint8_t g = min((ditheredG+0x80) >> 8, 255);
+				uint8_t b = min((ditheredB+0x80) >> 8, 255);
+
+				ledscape_pixel_set_color(
+					pixel_out,
+					color_channel_order,
+					r,
+					g,
+					b
+				);
 
 				// Check for interpolation effect
 				if (r != (interpolatedR+0x80)>>8) pixel_in_overflow->last_effect_frame_r = ditheringFrame;

@@ -19,16 +19,16 @@
 #define LEDSCAPE_NUM_STRIPS 48
 
 
-/** LEDscape pixel format is BRGA.
- *
- * data is laid out with BRGA format, since that is how it will
- * be translated during the clock out from the PRU.
+/**
+ * An LEDscape "pixel" consists of three channels of output and an unused fourth channel. The color mapping of these
+ * channels is not defined by the pixel construct, but is specified by color_channel_order_t. Use ledscape_pixel_set_color
+ * to assign color values to a pixel.
  */
 typedef struct {
-	uint8_t b;
-	uint8_t r;
-	uint8_t g;
-	uint8_t a;
+	uint8_t a;// was blue
+	uint8_t b;// was red
+	uint8_t c;// was green
+	uint8_t unused;
 } __attribute__((__packed__)) ledscape_pixel_t;
 
 
@@ -55,6 +55,17 @@ typedef struct {
 	size_t frame_size;
 } ledscape_t;
 
+
+typedef enum {
+	COLOR_ORDER_RGB,
+	COLOR_ORDER_RBG,
+	COLOR_ORDER_GRB,
+	COLOR_ORDER_GBR,
+	COLOR_ORDER_BGR,
+	COLOR_ORDER_BRG // Old LEDscape default
+} color_channel_order_t;
+
+
 extern ledscape_t * ledscape_init(
 unsigned num_pixels
 );
@@ -72,17 +83,15 @@ ledscape_frame(
 	unsigned frame
 );
 
-
 extern void
 ledscape_draw(
 	ledscape_t * const leds,
 	unsigned frame
 );
 
-
-extern void
-ledscape_set_color(
+extern inline void ledscape_set_color(
 	ledscape_frame_t * const frame,
+	color_channel_order_t color_channel_order,
 	uint8_t strip,
 	uint16_t pixel,
 	uint8_t r,
@@ -90,6 +99,13 @@ ledscape_set_color(
 	uint8_t b
 );
 
+extern inline void ledscape_pixel_set_color(
+	ledscape_pixel_t * const out_pixel,
+	color_channel_order_t color_channel_order,
+	uint8_t r,
+	uint8_t g,
+	uint8_t b
+);
 
 extern uint32_t
 ledscape_wait(
@@ -100,6 +116,15 @@ ledscape_wait(
 extern void
 ledscape_close(
 	ledscape_t * const leds
+);
+
+
+extern const char* color_channel_order_to_string(
+	color_channel_order_t color_channel_order
+);
+
+extern color_channel_order_t color_channel_order_from_string(
+	const char* str
 );
 
 #endif
