@@ -1,0 +1,10 @@
+[Unit]
+Description=LEDScape UDP Receiver
+
+[Service]
+WorkingDirectory=LEDSCAPE_PATH/
+ExecStart=LEDSCAPE_PATH/run-ledscape
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

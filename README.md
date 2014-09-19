@@ -112,19 +112,17 @@ Setup
 
 Once you have LEDscape sending data to your pixels, you will probably
 want to use the `opc-server` server which accepts Open Pixel Control data
-and passes it on to LEDscape. There is an systemd service
-checked in. Modify `ledscape.service` to point at your local install directory
-and then run:
+and passes it on to LEDscape. There is an systemd service file built to run
+LEDscape from it's home directory. Simple install/uninstall scripts are provided:
 
-	sudo systemctl enable /path/to/LEDscape/ledscape.service
-	sudo systemctl start ledscape
+	sudo ./install-service.sh
 
-Note that you must specify an absolute path. Relative paths will not
-work with systemctl to enable services.
-
-If you would prefer to run the receiver without adding it as a service:
+If you would prefer to run the receiver startup script without adding it as a service:
 
 	sudo ./run-ledscape
+
+-------------
+Configuration
 	
 By default LEDscape is configured for strings of 256 WS2811 pixels, accepting OPC
 data on port 7890. You can adjust this by editing `run-ledscape` and 

@@ -2,9 +2,9 @@
 DIRNAME="`dirname "$0"`"
 cd "$DIRNAME"
 
-# Ensure that SSH is running. It really sucks when you (or systemd) screw up it doesn't start. Since HDMI is disabled,
+# Uncomment to ensure that SSH is running. It really sucks when you (or systemd) screw up it doesn't start. Since HDMI is disabled,
 # it's REALLY important that SSHd be running, since you have no other easy option to connect.
-(sleep 30; /usr/bin/sshd -f /etc/ssh/sshd_config) &
+# (sleep 30; /usr/bin/sshd -f /etc/ssh/sshd_config) &
 
 modprobe uio_pruss
 ./opc-server -p 7890 -c 176

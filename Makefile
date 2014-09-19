@@ -10,7 +10,7 @@ LEDSCAPE_LIB := libledscape.a
 PRU_TEMPLATES := $(wildcard pru/templates/*.p)
 EXPANDED_PRU_TEMPLATES := $(addprefix pru/generated/, $(notdir $(PRU_TEMPLATES:.p=.template)))
 
-all: $(TARGETS) all_pru_templates
+all: $(TARGETS) all_pru_templates ledscape.service
 
 ifeq ($(shell uname -m),armv7l)
 # We are on the BeagleBone Black itself;
@@ -72,15 +72,17 @@ LDLIBS += $(APP_LOADER_LIB) -lm
 PASM_DIR ?= ./am335x/pasm
 PASM := $(PASM_DIR)/pasm
 
-pru/generated/%.template: pru/templates/%.p
+pru/generated/%.template: pru/templates/%.p pru/templates/common.p.h
 	$(eval TEMPLATE_NAME := $(basename $(notdir $@)))
-	touch $@
+	mkdir -p pru/generated
 	pru/build_template.sh $(TEMPLATE_NAME)
+	touch $@
 	$(MAKE) `ls pru/generated | egrep '^$(TEMPLATE_NAME).*\.p$$' | sed 's/.p$$/.bin/' | sed -E 's/(.*)/pru\/generated\/\1/'`
 
 all_pru_templates: $(EXPANDED_PRU_TEMPLATES)
 
 %.bin: %.p $(PASM)
+	mkdir -p pru/bin
 	cd `dirname $@` && gcc -E - < $(notdir $<) | perl -p -e 's/^#.*//; s/;/\n/g; s/BYTE\((\d+)\)/t\1/g' > $(notdir $<).i
 	$(PASM) -V3 -b $<.i pru/bin/$(notdir $(basename $@))
 	#$(RM) $<.i
@@ -93,6 +95,8 @@ $(foreach O,$(TARGETS),$(eval $O: $O.o $(LEDSCAPE_OBJS) $(APP_LOADER_LIB)))
 $(TARGETS):
 	$(COMPILE.link)
 
+ledscape.service: ledscape.service.in
+	sed 's%LEDSCAPE_PATH%'`pwd`'%' ledscape.service.in > ledscape.service
 
 .PHONY: clean
 
@@ -108,7 +112,9 @@ clean:
 		lib/cesanta/.*.o.d \
 		lib/cesanta/*.i \
 		lib/cesanta/*.o \
-		pru/generated/*
+		pru/generated \
+		pru/bin \
+		ledscape.service
 	cd am335x/app_loader/interface && $(MAKE) clean
 	cd am335x/pasm && $(MAKE) clean
 
