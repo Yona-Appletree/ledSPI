@@ -190,11 +190,7 @@
  */
 .macro SLEEPNS
 .mparam ns,inst,lab
-#ifdef CONFIG_WS2812
-	MOV r_sleep_counter, (ns/5)-1-inst // ws2812 -- low speed
-#else
 	MOV r_sleep_counter, (ns/10)-1-inst // ws2811 -- high speed
-#endif
 lab:
 	SUB r_sleep_counter, r_sleep_counter, 1
 	QBNE lab, r_sleep_counter, 0
@@ -204,15 +200,16 @@ lab:
 /** Wait for the cycle counter to reach a given value */
 .macro WAITNS
 .mparam ns,lab
-	MOV r8, PRU_CONTROL_ADDRESS // control register
+	MOV r_temp_addr, PRU_CONTROL_ADDRESS // control register
+
+	// Instructions take 5ns and RESET_COUNTER takes about 20 instructions
+	// this value was found through trial and error on the DMX signal
+	// generation
+	MOV r_temp2, (ns)/5 - 20
 lab:
-	LBBO r9, r8, 0xC, 4 // read the cycle counter
+	LBBO r_temp1, r_temp_addr, 0xC, 4 // read the cycle counter
 //	SUB r9, r9, r_sleep_counter
-#ifdef CONFIG_WS2812
-	QBGT lab, r9, 2*(ns)/5
-#else
-	QBGT lab, r9, (ns)/5
-#endif
+	QBGT lab, r_temp1, r_temp2
 .endm
 
 /** Reset the cycle counter */
@@ -231,7 +228,7 @@ lab:
 
 		// Read the current counter value
 		// Should be zero.
-		LBBO r_sleep_counter, r_temp_addr, 0xC, 4
+		// LBBO r_sleep_counter, r_temp_addr, 0xC, 4
 .endm
 
 // ***************************************

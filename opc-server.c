@@ -17,6 +17,8 @@
 #include <string.h>
 #include <math.h>
 #include <getopt.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include "util.h"
 #include "ledscape.h"
 
@@ -65,6 +67,8 @@ typedef struct {
 
 	uint16_t tcp_port;
 	uint16_t udp_port;
+	uint16_t e131_port;
+
 	uint16_t leds_per_strip;
 	uint16_t used_strip_count;
 
@@ -94,12 +98,13 @@ void start_server();
 // Frame Manipulation
 void ensure_frame_data();
 void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_remote);
-void rotate_frames();
+void rotate_frames(uint8_t lock_frame_data);
 
 // Threads
 void* render_thread(void* threadarg);
 void* udp_server_thread(void* threadarg);
 void* tcp_server_thread(void* threadarg);
+void* e131_server_thread(void* threadarg);
 void* demo_thread(void* threadarg);
 
 // Config Methods
@@ -143,6 +148,9 @@ server_config_t g_server_config = {
 
 	.tcp_port = 7890,
 	.udp_port = 7890,
+
+	.e131_port = 5568,
+
 	.leds_per_strip = 176,
 	.used_strip_count = LEDSCAPE_NUM_STRIPS,
 	.color_channel_order = COLOR_ORDER_BRG,
@@ -162,6 +170,7 @@ typedef struct {
 	uint8_t b;
 } __attribute__((__packed__)) buffer_pixel_t;
 
+// Pixel Delta
 typedef struct {
 	int8_t r;
 	int8_t g;
@@ -172,6 +181,8 @@ typedef struct {
 	int8_t last_effect_frame_b;
 } __attribute__((__packed__)) pixel_delta_t;
 
+
+// Global runtime data
 static struct
 {
 	buffer_pixel_t* previous_frame_data;
@@ -185,6 +196,8 @@ static struct
 	uint8_t has_next_frame;
 
 	uint32_t frame_size;
+
+	uint32_t frame_counter;
 
 	struct timeval previous_frame_tv;
 	struct timeval current_frame_tv;
@@ -221,11 +234,13 @@ static struct
 	.leds = NULL
 };
 
+// Global thread handles
 static struct
 {
 	pthread_t render_thread;
 	pthread_t tcp_server_thread;
 	pthread_t udp_server_thread;
+	pthread_t e131_server_thread;
 	pthread_t demo_thread;
 } g_threads;
 
@@ -236,6 +251,9 @@ static struct option long_options[] =
 {
     {"tcp-port", required_argument, NULL, 'p'},
     {"udp-port", required_argument, NULL, 'P'},
+
+    {"e131-port", required_argument, NULL, 'e'},
+
     {"count", required_argument, NULL, 'c'},
     {"strip-count", required_argument, NULL, 's'},
     {"dimensions", required_argument, NULL, 'd'},
@@ -322,7 +340,7 @@ int main(int argc, char ** argv)
 {
 	extern char *optarg;
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -332,6 +350,10 @@ int main(int argc, char ** argv)
 
 		case 'P': {
 			g_server_config.udp_port = atoi(optarg);
+		} break;
+
+		case 'e': {
+			g_server_config.e131_port = atoi(optarg);
 		} break;
 
 		case 'c': {
@@ -426,6 +448,7 @@ int main(int argc, char ** argv)
 					switch (option_info.val) {
 						case 'p': printf("The TCP port to listen for OPC data on"); break;
 						case 'P': printf("The UDP port to listen for OPC data on"); break;
+						case 'e': printf("The UDP port to listen for e131 data on"); break;
 						case 'c': printf("The number of pixels connected to each output channel"); break;
 						case 's': printf("The number of used output channels (improves performance by not interpolating/dithering unused channels)"); break;
 						case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 16x16 (256 pixels)"); break;
@@ -500,6 +523,7 @@ int main(int argc, char ** argv)
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
 	pthread_create(&g_threads.udp_server_thread, NULL, udp_server_thread, NULL);
 	pthread_create(&g_threads.tcp_server_thread, NULL, tcp_server_thread, NULL);
+	pthread_create(&g_threads.e131_server_thread, NULL, e131_server_thread, NULL);
 
 	if (g_server_config.demo_mode != NONE) {
 		printf("[main] Demo Mode Enabled\n");
@@ -604,8 +628,7 @@ int validate_server_config(
 
 	int error_count = 0;
 
-	inline void result_append(const char *format, ...)
-	{
+	inline void result_append(const char *format, ...) {
 		snprintf(
 			result_json_buffer + strlen(result_json_buffer),
 			result_json_buffer_size - strlen(result_json_buffer) + 1,
@@ -614,8 +637,7 @@ int validate_server_config(
 		);
 	}
 
-	inline void add_error(const char *format, ...)
-	{
+	inline void add_error(const char *format, ...) {
 		// Can't call result_append here because it breaks gcc:
 		// internal compiler error: in initialize_inlined_parameters, at tree-inline.c:2795
 		snprintf(
@@ -627,21 +649,19 @@ int validate_server_config(
 		error_count ++;
 	}
 
-	inline void assert_enum_valid(const char *var_name, int value)
-	{
+	inline void assert_enum_valid(const char *var_name, int value) {
 		if (value < 0) {
 			add_error(
-				"Invalid %s",
+				"\n\t\t\"" "Invalid %s" "\",",
 				var_name
 			);
 		}
 	}
 
-	inline void assert_int_range_inclusive(const char *var_name, int min_val, int max_val, int value)
-	{
+	inline void assert_int_range_inclusive(const char *var_name, int min_val, int max_val, int value) {
 		if (value < min_val || value > max_val) {
 			add_error(
-				"Given %s (%d) is outside of range %d-%d (inclusive)",
+				"\n\t\t\"" "Given %s (%d) is outside of range %d-%d (inclusive)" "\",",
 				var_name,
 				value,
 				min_val,
@@ -650,11 +670,10 @@ int validate_server_config(
 		}
 	}
 
-	inline void assert_double_range_inclusive(const char *var_name, double min_val, double max_val, double value)
-	{
+	inline void assert_double_range_inclusive(const char *var_name, double min_val, double max_val, double value) {
 		if (value < min_val || value > max_val) {
 			add_error(
-				"Given %s (%f) is outside of range %f-%f (inclusive)",
+				"\n\t\t\"" "Given %s (%f) is outside of range %f-%f (inclusive)" "\",",
 				var_name,
 				value,
 				min_val,
@@ -702,6 +721,9 @@ int validate_server_config(
 
 	// opcUdpPort
 	assert_int_range_inclusive("OPC UDP Port", 1, 65535, input_config->udp_port);
+
+	// opcUdpPort
+	assert_int_range_inclusive("e131 UDP Port", 1, 65535, input_config->e131_port);
 
 	// lumCurvePower
 	assert_double_range_inclusive("Luminance Curve Power", 0, 10, input_config->lum_power);
@@ -945,10 +967,14 @@ void ensure_frame_data() {
 /**
  * Set the next frame of data to the given 8-bit RGB buffer after rotating the buffers.
  */
-void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_remote) {
-	rotate_frames();
-
+void set_next_frame_data(
+	uint8_t* frame_data,
+	uint32_t data_size,
+	uint8_t is_remote
+) {
 	pthread_mutex_lock(&g_frame_data.mutex);
+
+	rotate_frames(FALSE);
 
 	// Prevent buffer overruns
 	data_size = min(data_size, g_frame_data.frame_size * 3);
@@ -973,10 +999,75 @@ void set_next_frame_data(uint8_t* frame_data, uint32_t data_size, uint8_t is_rem
 }
 
 /**
+ * Set a single channel in the next frame of data to be displayed, keeping current values.
+ */
+void set_next_frame_single_channel_data(
+	uint8_t channel_index,
+	uint8_t* frame_data,
+	uint32_t data_size,
+	uint8_t is_remote
+) {
+	pthread_mutex_lock(&g_frame_data.mutex);
+
+	rotate_frames(FALSE);
+
+	buffer_pixel_t* old_frame_data = NULL;
+
+	// Where will we be putting the new data
+	if (g_frame_data.has_current_frame) {
+		old_frame_data = g_frame_data.current_frame_data;
+	} else if (g_frame_data.has_prev_frame) {
+		old_frame_data = g_frame_data.previous_frame_data;
+	}
+
+	// Copy the data to the next frame buffer
+	if (old_frame_data != NULL) {
+		memcpy(
+			g_frame_data.next_frame_data,
+			old_frame_data,
+			g_frame_data.frame_size * sizeof(buffer_pixel_t)
+		);
+	}
+
+	// Copy in the new channel data
+	uint32_t pixel_count = g_frame_data.frame_size / LEDSCAPE_NUM_STRIPS;
+
+	uint32_t buffer_offset = channel_index * pixel_count * sizeof(buffer_pixel_t);
+	uint32_t copy_size = min(data_size, pixel_count * sizeof(buffer_pixel_t));
+
+
+	if (buffer_offset + copy_size <= g_frame_data.frame_size * sizeof(buffer_pixel_t)) {
+		memcpy(
+			(uint8_t*)g_frame_data.next_frame_data + buffer_offset,
+			frame_data,
+			copy_size
+		);
+
+//		printf("Writing %d bytes, channel %d, offset %d: ", copy_size, channel_index, buffer_offset);
+//		for (int i=0; i<copy_size; i++) {
+//			printf("%03d ", frame_data[i]);
+//		}
+//		printf("\n");
+	}
+
+	// Update the timestamp & count
+	gettimeofday(&g_frame_data.next_frame_tv, NULL);
+
+	// Update remote data timestamp if applicable
+	if (is_remote) {
+		gettimeofday(&g_frame_data.last_remote_data_tv, NULL);
+	}
+
+	g_frame_data.has_next_frame = TRUE;
+
+	pthread_mutex_unlock(&g_frame_data.mutex);
+}
+
+/**
  * Rotate the buffers, dropping the previous frame and loading in the new one
  */
-void rotate_frames() {
-	pthread_mutex_lock(&g_frame_data.mutex);
+void rotate_frames(uint8_t lock_frame_data) {
+	if (lock_frame_data) pthread_mutex_lock(&g_frame_data.mutex);
 
 	buffer_pixel_t* temp = NULL;
 
@@ -1013,7 +1104,7 @@ void rotate_frames() {
 		);
 	}
 
-	pthread_mutex_unlock(&g_frame_data.mutex);
+	if (lock_frame_data) pthread_mutex_unlock(&g_frame_data.mutex);
 }
 
 inline uint16_t lutInterpolate(uint16_t value, uint32_t* lut) {
@@ -1046,6 +1137,9 @@ void* render_thread(void* unused_data)
 	int8_t ditheringFrame = 0;
 	for(;;) {
 		pthread_mutex_lock(&g_frame_data.mutex);
+
+		// Increment the frame counter
+		__sync_fetch_and_add(&g_frame_data.frame_counter, 1);
 
 		// Wait until LEDscape is initialized
 		if (g_frame_data.leds == NULL) {
@@ -1080,7 +1174,7 @@ void* render_thread(void* unused_data)
 			if (has_next_frame && frame_progress_us > last_frame_time_us*2) {
 				// If we have more data, rotate it in.
 				//printf("Need data: rotating in; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
-				rotate_frames();
+				rotate_frames(TRUE);
 			} else {
 				// Otherwise sleep for a moment and wait for more data
 				//printf("Need data: none available; frame_progress_us=%llu; last_frame_time_us=%llu\n", frame_progress_us, last_frame_time_us);
@@ -1212,6 +1306,10 @@ void* render_thread(void* unused_data)
 					g,
 					b
 				);
+
+//				if (led_index == 0 && strip_index == 3) {
+//					printf("channel %d: %03d %03d %03d\n", strip_index, r, g, b);
+//				}
 
 				// Check for interpolation effect
 				if (r != (interpolatedR+0x80)>>8) pixel_in_overflow->last_effect_frame_r = ditheringFrame;
@@ -1417,6 +1515,192 @@ void* demo_thread(void* unused_data)
 		}
 
 		usleep(1e6);
+	}
+
+	pthread_exit(NULL);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// e131 Server
+//
+
+// From http://atastypixel-blog-content.s3.amazonaws.com/blog/wp-content/uploads/2010/05/multicast_sample.c
+int join_multicast_group_on_all_ifaces(
+	const int sock_fd,
+	const char* group_ip
+) {
+	// Obtain list of all network interfaces
+	struct ifaddrs *addrs;
+
+	if ( getifaddrs(&addrs) < 0 ) {
+		// Error occurred
+		return -1;
+	}
+
+	// Loop through interfaces, selecting those AF_INET devices that support multicast, but aren't loopback or point-to-point
+	const struct ifaddrs *cursor = addrs;
+	int joined_count = 0;
+	while ( cursor != NULL ) {
+		if ( cursor->ifa_addr->sa_family == AF_INET
+			 && !(cursor->ifa_flags & IFF_LOOPBACK)
+			 && !(cursor->ifa_flags & IFF_POINTOPOINT)
+			 &&	(cursor->ifa_flags & IFF_MULTICAST)
+		) {
+			// Prepare multicast group join request
+			struct ip_mreq multicast_req;
+			memset(&multicast_req, 0, sizeof(multicast_req));
+			multicast_req.imr_multiaddr.s_addr = inet_addr(group_ip);
+			multicast_req.imr_interface = ((struct sockaddr_in *)cursor->ifa_addr)->sin_addr;
+
+			// Workaround for some odd join behaviour: It's perfectly legal to join the same group on more than one interface,
+			// and up to 20 memberships may be added to the same socket (see ip(4)), but for some reason, OS X spews
+			// 'Address already in use' errors when we actually attempt it.	As a workaround, we can 'drop' the membership
+			// first, which would normally have no effect, as we have not yet joined on this interface.	However, it enables
+			// us to perform the subsequent join, without dropping prior memberships.
+			setsockopt(sock_fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &multicast_req, sizeof(multicast_req));
+
+			// Join multicast group on this interface
+			if ( setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &multicast_req, sizeof(multicast_req)) >= 0 ) {
+				printf("[e131] Joined multicast group %s on %s\n", group_ip, inet_ntoa(((struct sockaddr_in *)cursor->ifa_addr)->sin_addr));
+				joined_count ++;
+			} else {
+				// Error occurred
+				freeifaddrs(addrs);
+				return -1;
+			}
+		}
+
+		cursor = cursor->ifa_next;
+	}
+
+	freeifaddrs(addrs);
+
+	return joined_count;
+}
+
+void* e131_server_thread(void* unused_data)
+{
+	unused_data=unused_data; // Suppress Warnings
+
+	// Disable if given port 0
+	if (g_server_config.e131_port == 0) {
+		fprintf(stderr, "[e131] Not starting e131 server; Port is zero.\n");
+		pthread_exit(NULL);
+		return NULL;
+	}
+
+	fprintf(stderr, "[e131] Starting UDP server on port %d\n", g_server_config.e131_port);
+	uint8_t packet_buffer[65536]; // e131 packet buffer
+
+	const int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+
+	if (sock < 0)
+		die("[e131] socket failed: %s\n", strerror(errno));
+
+	struct sockaddr_in6 addr = {
+		.sin6_family = AF_INET6,
+		.sin6_addr = in6addr_any,
+		.sin6_port = htons(g_server_config.e131_port),
+	};
+
+	if (bind(sock, (const struct sockaddr*) &addr, sizeof(addr)) < 0) {
+		fprintf(stderr, "[e131] bind port %d failed: %s\n", g_server_config.e131_port, strerror(errno));
+		pthread_exit(NULL);
+		return NULL;
+	}
+
+	int32_t last_seq_num = -1;
+
+	// Bind to multicast
+	if (join_multicast_group_on_all_ifaces(sock, "239.255.0.0") < 0) {
+		fprintf(stderr, "[e131] failed to bind to multicast addresses\n");
+	}
+
+	uint8_t* dmx_buffer = NULL;
+	uint32_t dmx_buffer_size = 0;
+
+	uint32_t packets_since_update = 0;
+	uint32_t frame_counter_at_last_update = g_frame_data.frame_counter;
+
+	while (1)
+	{
+		const ssize_t received_packet_size = recv(sock, packet_buffer, sizeof(packet_buffer), 0);
+		if (received_packet_size < 0) {
+			fprintf(stderr, "[e131] recv failed: %s\n", strerror(errno));
+			continue;
+		}
+
+		// Ensure the buffer
+		pthread_mutex_lock(&g_server_config.mutex);
+		uint32_t leds_per_strip = g_server_config.leds_per_strip;
+		uint32_t led_count = g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS;
+		pthread_mutex_unlock(&g_server_config.mutex);
+
+		if (dmx_buffer == NULL || dmx_buffer_size != led_count) {
+			if (dmx_buffer != NULL) free(dmx_buffer);
+			dmx_buffer_size = led_count * sizeof(buffer_pixel_t);
+			dmx_buffer = malloc(dmx_buffer_size);
+		}
+
+		// Packet should be at least 126 bytes for the header
+		if (received_packet_size >= 126) {
+			int32_t current_seq_num = packet_buffer[111];
+
+			if (last_seq_num == -1 || current_seq_num >= last_seq_num || (last_seq_num - current_seq_num) > 64) {
+				last_seq_num = current_seq_num;
+
+				// 1-based DMX universe
+				uint16_t dmx_universe_num = ((uint16_t)packet_buffer[113] << 8) | packet_buffer[114];
+
+				if (dmx_universe_num >= 1 && dmx_universe_num <= 48) {
+					uint16_t ledscape_channel_num = dmx_universe_num - 1;
+					// Data OK
+//					set_next_frame_single_channel_data(
+//						ledscape_channel_num,
+//						packet_buffer + 126,
+//						received_packet_size - 126,
+//						TRUE
+//					);
+
+					memcpy(
+						dmx_buffer + ledscape_channel_num * leds_per_strip * sizeof(buffer_pixel_t),
+						packet_buffer + 126,
+						min(received_packet_size - 126, led_count * sizeof(buffer_pixel_t))
+					);
+
+					set_next_frame_data(
+						dmx_buffer,
+						dmx_buffer_size * sizeof(buffer_pixel_t),
+						TRUE
+					);
+				} else {
+					fprintf(
+					stderr,
+						"[e131] DMX universe %d out of bounds [1,48] \n",
+						dmx_universe_num
+					);
+				}
+			} else {
+				// Out of order sequence packet
+				fprintf(stderr, "[e131] out of order packet; current %d, old %d \n", current_seq_num, last_seq_num);
+			}
+		} else {
+			fprintf(stderr, "[e131] packet too small: %d < 126 \n", received_packet_size);
+		}
+
+		// Increment counter
+		packets_since_update ++;
+		if (g_frame_data.frame_counter != frame_counter_at_last_update) {
+			packets_since_update = 0;
+			frame_counter_at_last_update = g_frame_data.frame_counter;
+		}
+
+		if (packets_since_update >= LEDSCAPE_NUM_STRIPS) {
+			// Force an update here
+			while (g_frame_data.frame_counter == frame_counter_at_last_update)
+				usleep(1e3 /* 1ms */);
+		}
 	}
 
 	pthread_exit(NULL);

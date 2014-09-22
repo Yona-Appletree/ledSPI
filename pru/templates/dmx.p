@@ -85,20 +85,22 @@ _LOOP:
 	// Command of 0xFF is the signal to exit
 	QBEQ EXIT, r2, #0xFF
 
-    ////////////////
-    // PREAMBLE
+	////////////////
+	// PREAMBLE
 
 	PREP_GPIO_MASK_NAMED(all)
 
 	// LOW for 220us
 	PREP_GPIO_ADDRS_FOR_CLEAR()
 	GPIO_APPLY_MASK_TO_ADDR()
-	SLEEPNS 220000, 4, wait_preamble_low
+	//SLEEPNS 220000, 4, wait_preamble_low
+	WAITNS 220000, wait_preamble_low
 
 	// HIGH for 113us
 	PREP_GPIO_ADDRS_FOR_SET()
 	GPIO_APPLY_MASK_TO_ADDR()
-	SLEEPNS 113000, 4, wait_preamble_high1
+	//SLEEPNS 113000, 4, wait_preamble_high1
+	WAITNS (220000+113000), wait_preamble_high1
 
 	///////////////
 	// ZERO FRAME
@@ -107,7 +109,8 @@ _LOOP:
 	PREP_GPIO_ADDRS_FOR_CLEAR()
 	GPIO_APPLY_MASK_TO_ADDR()
 
-	SLEEPNS 32500, 4, wait_zeroframe_low //4us happens in the beginning of the loop
+	//SLEEPNS 32500, 4, wait_zeroframe_low //4us happens in the beginning of the loop
+	WAITNS (220000+113000+32000), wait_zeroframe_low //4us happens in the beginning of the loop
 
 	// HIGH for 8us is handled by the first byte
 	RESET_COUNTER
@@ -158,29 +161,32 @@ l_word_loop:
 		// Load the address(es) of the GPIO devices
 		PREP_GPIO_MASK_NAMED(all)
 
-		//WAITNS 4000, wait_lastframe_end // Wait for last bit to finish
-		SLEEPNS 2560, 0, wait_lastframe_end
 
 		//////////////////////////
 		// POTENTIAL STOP BIT
 		// Stop bits happen after bits 0, 8, 16
 		AND r_temp1, r_bit_num, 7
 		QBNE skip_stop_bits, r_temp1, 0
+			// Wait for last bit to finish
+			WAITNS 4000, wait_lastframe_in_stop_end
+
 			// HIGH (all)
 			PREP_GPIO_ADDRS_FOR_SET()
 			GPIO_APPLY_MASK_TO_ADDR()
 
 			// Wait for 8us
-			SLEEPNS 8000, 4, wait_stop_bit
+			//SLEEPNS 8000, 4, wait_stop_bit
+			WAITNS 12000, wait_stop_bit
+
+			// Reset the counter so the bit-loop can get the 4us wait
+			RESET_COUNTER
 
 			// LOW (all) leading 0
 			PREP_GPIO_ADDRS_FOR_CLEAR()
 			GPIO_APPLY_MASK_TO_ADDR()
 
 			// Wait for 4us
-			SLEEPNS 3750, 4, wait_stop_zero
-
-			RESET_COUNTER
+			// Don't actually wait here... reset the counter so the next bit handles the wait for better timing
 
 		skip_stop_bits:
 
@@ -192,22 +198,56 @@ l_word_loop:
 		// FRAME START
 		INCREMENT r_bit_num
 
+		// LOW (0s only):
+//		PREP_GPIO_ADDRS_FOR_CLEAR()
+//		GPIO_APPLY_ZEROS_TO_ADDR()
+//
+//		// Invert zeros to set ones
+//		XOR r_gpio0_zeros, r_gpio0_zeros, r_gpio0_mask
+//		XOR r_gpio1_zeros, r_gpio1_zeros, r_gpio1_mask
+//		XOR r_gpio2_zeros, r_gpio2_zeros, r_gpio2_mask
+//		XOR r_gpio3_zeros, r_gpio3_zeros, r_gpio3_mask
+//
+//		// HIGH (1s only):
+//		PREP_GPIO_ADDRS_FOR_SET()
+//		GPIO_APPLY_ZEROS_TO_ADDR()
+
+
+		// Prep addresses for zero bits
+		PREP_GPIO_ADDRS_FOR_CLEAR()
+
+		// Prep a second set of addresses for the one bits so we don't have to spend extra time loading these
+		// addresses between the 0 and 1 bit sends
+		MOV r_data0, GPIO0 | GPIO_SETDATAOUT;
+		MOV r_data1, GPIO1 | GPIO_SETDATAOUT;
+		MOV r_data2, GPIO2 | GPIO_SETDATAOUT;
+		MOV r_data3, GPIO3 | GPIO_SETDATAOUT;
+
+		// Invert zeros (but only within the mask) and store them in a second set of registers to send the ones
+		XOR r_data4, r_gpio0_zeros, r_gpio0_mask
+		XOR r_data5, r_gpio1_zeros, r_gpio1_mask
+		XOR r_data6, r_gpio2_zeros, r_gpio2_mask
+		XOR r_data7, r_gpio3_zeros, r_gpio3_mask
+
+		// Wait for last bit to finish
+		WAITNS 4000, wait_lastframe_end
+
 		// Start of the next timing frame
 		RESET_COUNTER
 
-		// LOW (0s only):
-		PREP_GPIO_ADDRS_FOR_CLEAR()
-		GPIO_APPLY_ZEROS_TO_ADDR()
+		// Apply data to GPIO banks one at a time to reduce latency between the 0 and 1 switch per line
+		SBBO r_gpio0_zeros, r_gpio0_addr, 0, 4;
+		SBBO r_data4, r_data0, 0, 4;
 
-		// Invert zeros to set ones
-		XOR r_gpio0_zeros, r_gpio0_zeros, r_gpio0_mask
-		XOR r_gpio1_zeros, r_gpio1_zeros, r_gpio1_mask
-		XOR r_gpio2_zeros, r_gpio2_zeros, r_gpio2_mask
-		XOR r_gpio3_zeros, r_gpio3_zeros, r_gpio3_mask
+		SBBO r_gpio1_zeros, r_gpio1_addr, 0, 4;
+		SBBO r_data5, r_data1, 0, 4;
 
-		// HIGH (1s only):
-		PREP_GPIO_ADDRS_FOR_SET()
-		GPIO_APPLY_ZEROS_TO_ADDR()
+		SBBO r_gpio2_zeros, r_gpio2_addr, 0, 4;
+		SBBO r_data6, r_data2, 0, 4;
+
+		SBBO r_gpio3_zeros, r_gpio3_addr, 0, 4;
+		SBBO r_data7, r_data3, 0, 4;
+
 
 		// The bits finish in the next iteration
 		QBNE l_bit_loop, r_bit_num, 24
@@ -224,7 +264,7 @@ l_word_loop:
 	GPIO_APPLY_MASK_TO_ADDR()
 
 	// HIGH for about 2ms
-	SLEEPNS 2104800, 4, wait_end_high
+	SLEEPNS 2504800, 4, wait_end_high
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
