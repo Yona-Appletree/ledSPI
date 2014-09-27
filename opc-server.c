@@ -1358,7 +1358,7 @@ void* demo_thread(void* unused_data)
 	struct timeval now_tv, delta_tv;
 	uint8_t demo_enabled = FALSE;
 
-	for (uint16_t i = 0; /*ever*/; i+=400) {
+	for (uint16_t i = 0; /*ever*/; i+=20) {
 		// Calculate time since last remote data
 		pthread_mutex_lock(&g_frame_data.mutex);
 			gettimeofday(&now_tv, NULL);
@@ -1416,7 +1416,7 @@ void* demo_thread(void* unused_data)
 			set_next_frame_data(buffer, buffer_size, FALSE);
 		}
 
-		usleep(1e6);
+		usleep(30000);
 	}
 
 	pthread_exit(NULL);
