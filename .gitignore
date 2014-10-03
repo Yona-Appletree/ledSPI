@@ -17,3 +17,5 @@ opc-server
 pru/generated
 pru/bin
 ledscape.service
+.idea
+*.iml
