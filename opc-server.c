@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <sys/mman.h>
 #include "util.h"
 #include "ledscape.h"
 
@@ -26,6 +27,7 @@
 #include "lib/cesanta/frozen.h"
 
 #include <pthread.h>
+#include <stdbool.h>
 
 // TODO:
 // Server:
@@ -37,18 +39,21 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// DEFINES
+// DEFINES, CONSTANTS and UTILS
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 #define TRUE 1
 #define FALSE 0
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-uint32_t uint32_min(uint32_t a, uint32_t b) { return a < b ? a : b; }
-uint32_t uint32_umax(uint32_t a, uint32_t b) { return a > b ? a : b; }
+#define mint(t, a, b) ((t) (a) < (t) (b) ? (a) : (b))
+#define maxt(t, a, b) ((t) (a) > (t) (b) ? (a) : (b))
 
-int32_t int32_min(int32_t a, int32_t b) { return a < b ? a : b; }
-int32_t int32_smax(int32_t a, int32_t b) { return a > b ? a : b; }
+static const int MAX_CONFIG_FILE_LENGTH_BYTES = 1024*1024*10;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TYPES
@@ -69,8 +74,8 @@ typedef struct {
 	uint16_t udp_port;
 	uint16_t e131_port;
 
-	uint16_t leds_per_strip;
-	uint16_t used_strip_count;
+	uint32_t leds_per_strip;
+	uint32_t used_strip_count;
 
 	color_channel_order_t color_channel_order;
 
@@ -90,10 +95,12 @@ typedef struct {
 	char json[4096];
 } server_config_t;
 
+char g_config_filename[4096] = {0};
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Method declarations
 void teardown_server();
-void start_server();
+void ensure_server_setup();
 
 // Frame Manipulation
 void ensure_frame_data();
@@ -109,12 +116,19 @@ void* demo_thread(void* threadarg);
 
 // Config Methods
 void build_lookup_tables();
-void build_config_json();
 int validate_server_config(
 	server_config_t* input_config,
 	char * result_json_buffer,
-	int result_json_buffer_size
+	size_t result_json_buffer_size
 );
+
+int server_config_from_json(
+	const char* json,
+	size_t json_size,
+	server_config_t* output_config
+) ;
+
+void server_config_to_json(char* dest_string, size_t dest_string_size, server_config_t* input_config) ;
 
 const char* demo_mode_to_string(demo_mode_t mode) {
 	switch (mode) {
@@ -135,6 +149,67 @@ demo_mode_t demo_mode_from_string(const char* str) {
 	} else {
 		return -1;
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Error Handling
+
+typedef enum {
+	OPC_SERVER_ERR_NONE,
+	OPC_SERVER_ERR_NO_JSON,
+	OPC_SERVER_ERR_INVALID_JSON,
+	OPC_SERVER_ERR_FILE_READ_FAILED,
+	OPC_SERVER_ERR_FILE_WRITE_FAILED,
+	OPC_SERVER_ERR_FILE_TOO_LARGE,
+	OPC_SERVER_ERR_SEEK_FAILED
+} opc_error_code_t;
+
+__thread opc_error_code_t g_error_code = 0;
+__thread char g_error_info_str[4096];
+
+
+const char* opc_server_strerr(
+	opc_error_code_t error_code
+) {
+	switch (error_code) {
+		case OPC_SERVER_ERR_NONE: return "No error";
+		case OPC_SERVER_ERR_NO_JSON: return "No JSON document given";
+		case OPC_SERVER_ERR_INVALID_JSON: return "Invalid JSON document given";
+		default: return "Unkown Error";
+	}
+}
+
+inline int opc_server_set_error(
+	opc_error_code_t error_code,
+	const char* extra_info,
+	...
+) {
+	g_error_code = error_code;
+
+	if (extra_info == NULL || strlen(extra_info) == 0) {
+		strlcpy(
+			g_error_info_str,
+			opc_server_strerr(error_code),
+			sizeof(g_error_info_str)
+		);
+	} else {
+		char extra_info_out[2048];
+		snprintf(
+			extra_info_out,
+			sizeof(extra_info_out),
+			extra_info,
+			__builtin_va_arg_pack()
+		);
+		snprintf(
+			extra_info_out,
+			sizeof(g_error_info_str),
+			"%s: %s",
+			opc_server_strerr(error_code),
+			extra_info
+		);
+	}
+
+	return -1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,8 +271,9 @@ static struct
 	uint8_t has_next_frame;
 
 	uint32_t frame_size;
+	uint32_t leds_per_strip;
 
-	uint32_t frame_counter;
+	volatile uint32_t frame_counter;
 
 	struct timeval previous_frame_tv;
 	struct timeval current_frame_tv;
@@ -217,7 +293,7 @@ static struct
 	struct timeval last_remote_data_tv;
 
 	pthread_mutex_t mutex;
-} g_frame_data = {
+} g_runtime_state = {
 	.previous_frame_data = (buffer_pixel_t*)NULL,
 	.current_frame_data = (buffer_pixel_t*)NULL,
 	.next_frame_data = (buffer_pixel_t*)NULL,
@@ -226,6 +302,7 @@ static struct
 	.has_next_frame = FALSE,
 	.frame_dithering_overflow = (pixel_delta_t*)NULL,
 	.frame_size = 0,
+	.leds_per_strip = 0,
 	.mutex = PTHREAD_MUTEX_INITIALIZER,
 	.last_remote_data_tv = {
 		.tv_sec = 0,
@@ -235,14 +312,26 @@ static struct
 };
 
 // Global thread handles
+typedef struct {
+	pthread_t handle;
+	bool enabled;
+	bool running;
+} thread_state_lt;
+
 static struct
 {
-	pthread_t render_thread;
-	pthread_t tcp_server_thread;
-	pthread_t udp_server_thread;
-	pthread_t e131_server_thread;
-	pthread_t demo_thread;
-} g_threads;
+	thread_state_lt render_thread;
+	thread_state_lt tcp_server_thread;
+	thread_state_lt udp_server_thread;
+	thread_state_lt e131_server_thread;
+	thread_state_lt demo_thread;
+} g_threads = {
+	{NULL, false, false},
+	{NULL, false, false},
+	{NULL, false, false},
+	{NULL, false, false},
+	{NULL, false, false}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -280,10 +369,12 @@ static struct option long_options[] =
     {"mode", required_argument, NULL, 'm'},
     {"mapping", required_argument, NULL, 'M'},
 
+    {"config", required_argument, NULL, 'C'},
+
     {NULL, 0, NULL, 0}
 };
 
-const void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
+void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
 	if (strcasecmp(input, "NOP") == 0) {
 		strcpy(g_server_config.output_mode_name, "nop");
 		strcpy(g_server_config.output_mapping_name, "original-ledscape");
@@ -336,39 +427,111 @@ void print_usage(char ** argv) {
 	printf("\n");
 }
 
-int main(int argc, char ** argv)
-{
+int read_config_file(
+	const char * config_filename,
+	server_config_t* out_config
+) {
+	// Map the file for reading
+	int fd = open(config_filename, O_RDONLY);
+	if (fd < 0) {
+		return opc_server_set_error(
+			OPC_SERVER_ERR_FILE_READ_FAILED,
+			"Failed to open config file %s for reading: %s\n",
+			config_filename,
+			strerror(errno)
+		);
+	}
+
+	off_t file_end_offset = lseek(fd, 0, SEEK_END);
+
+	if (file_end_offset < 0) {
+		return opc_server_set_error(
+			OPC_SERVER_ERR_SEEK_FAILED,
+			"Failed to seek to end of %s.\n",
+			config_filename
+		);
+	}
+
+	if (file_end_offset > MAX_CONFIG_FILE_LENGTH_BYTES) {
+		return opc_server_set_error(
+			OPC_SERVER_ERR_FILE_TOO_LARGE,
+			"Failed to open config file %s: file is larger than 10MB.\n",
+			config_filename
+		);
+	}
+
+	size_t file_length = (size_t) file_end_offset;
+
+	void *data = mmap(0, file_length, PROT_READ, MAP_PRIVATE, fd, 0);
+
+	// Read the config
+	// TODO: Handle character encoding?
+	char* str_data = malloc(file_length + 1);
+	memcpy(str_data, data, file_length);
+	str_data[file_length] = 0;
+	server_config_from_json(str_data, strlen(str_data), out_config);
+	free(str_data);
+
+	// Unmap the data
+	munmap(data, file_length);
+
+	return close(fd);
+}
+
+int write_config_file(
+	const char* config_filename,
+	server_config_t* config
+) {
+	FILE* fd = fopen(config_filename, "w");
+	if (fd == NULL) {
+		return opc_server_set_error(
+			OPC_SERVER_ERR_FILE_WRITE_FAILED,
+			"Failed to open config file %s for reading: %s\n",
+			config_filename,
+			strerror(errno)
+		);
+	}
+
+	char json_buffer[4096] = {0};
+	server_config_to_json(json_buffer, sizeof(json_buffer), config);
+	fputs(json_buffer, fd);
+
+	return fclose(fd);
+}
+
+void handle_args(int argc, char ** argv) {
 	extern char *optarg;
+
 	int opt;
 	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
 		case 'p': {
-			g_server_config.tcp_port = atoi(optarg);
+			g_server_config.tcp_port = (uint16_t) atoi(optarg);
 		} break;
 
 		case 'P': {
-			g_server_config.udp_port = atoi(optarg);
+			g_server_config.udp_port = (uint16_t) atoi(optarg);
 		} break;
 
 		case 'e': {
-			g_server_config.e131_port = atoi(optarg);
+			g_server_config.e131_port = (uint16_t) atoi(optarg);
 		} break;
 
 		case 'c': {
-			g_server_config.leds_per_strip = atoi(optarg);
+			g_server_config.leds_per_strip = (uint32_t) atoi(optarg);
 		} break;
 
 		case 's': {
-			g_server_config.used_strip_count = atoi(optarg);
+			g_server_config.used_strip_count = (uint32_t) atoi(optarg);
 		} break;
 
 		case 'd': {
 			int width=0, height=0;
 
 			if (sscanf(optarg,"%dx%d", &width, &height) == 2) {
-				g_server_config.leds_per_strip = width * height;
+				g_server_config.leds_per_strip = (uint32_t) (width * height);
 			} else {
 				printf("Invalid argument for -d; expected NxN; actual: %s", optarg);
 				exit(EXIT_FAILURE);
@@ -397,19 +560,19 @@ int main(int argc, char ** argv)
 		} break;
 
 		case 'L': {
-			g_server_config.lum_power = atof(optarg);
+			g_server_config.lum_power = (float) atof(optarg);
 		} break;
 
 		case 'r': {
-			g_server_config.white_point.red = atof(optarg);
+			g_server_config.white_point.red = (float) atof(optarg);
 		} break;
 
 		case 'g': {
-			g_server_config.white_point.green = atof(optarg);
+			g_server_config.white_point.green = (float) atof(optarg);
 		} break;
 
 		case 'b': {
-			g_server_config.white_point.blue = atof(optarg);
+			g_server_config.white_point.blue = (float) atof(optarg);
 		} break;
 
 		case '0': {
@@ -426,6 +589,16 @@ int main(int argc, char ** argv)
 
 		case 'M': {
 			strlcpy(g_server_config.output_mapping_name, optarg, sizeof(g_server_config.output_mapping_name));
+		} break;
+
+		case 'C': {
+			strlcpy(g_config_filename, optarg, sizeof(g_config_filename));
+
+			if (read_config_file(g_config_filename, &g_server_config) >= 0) {
+				fprintf(stderr, "Loaded config file from %s.\n", g_config_filename);
+			} else {
+				fprintf(stderr, "Config file not loaded: %s\n", g_error_info_str);
+			}
 		} break;
 
 		case 'h': {
@@ -482,7 +655,13 @@ int main(int argc, char ** argv)
 							printf("\toriginal-ledscape: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
 							printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
 						break;
+						case 'C':
+							printf("Specifies a configuration file to use and creates it if it does not already exist.\n");
+							printf("\tIf used with other options, options are parsed in order. Options before --config are overwritten\n");
+							printf("\tby the config file, and options afterwards will be saved to the config file.\n");
+						break;
 						case 'h': printf("Displays this help message"); break;
+						default: printf("Undocumented option: %c\n", option_info.val);
 					}
 
 					printf("\n");
@@ -490,7 +669,7 @@ int main(int argc, char ** argv)
 			}
 			printf("\n");
 			exit(EXIT_SUCCESS);
-		} break;
+		}
 
 		default:
 			printf("Invalid option: %c\n\n", opt);
@@ -499,20 +678,35 @@ int main(int argc, char ** argv)
 			exit(EXIT_FAILURE);
 		}
 	}
+}
+
+int main(int argc, char ** argv)
+{
+	char validation_output_buffer[1024*1024];
+
+	handle_args(argc, argv);
 
 	// Validate the configuration
-	char validation_output_buffer[1024*1024];
 	if (validate_server_config(
 		& g_server_config,
 		validation_output_buffer,
 		sizeof(validation_output_buffer)
 	) != 0) {
-		fprintf(stderr,
-			"ERROR: Configuration failed validation:\n%s",
+		die("ERROR: Configuration failed validation:\n%s",
 			validation_output_buffer
 		);
+	}
 
-		exit(-1);
+	// Save the config file if specified
+	if (strlen(g_config_filename) > 0) {
+		if (write_config_file(
+			g_config_filename,
+			&g_server_config
+		) >= 0) {
+			fprintf(stderr, "Config file written to %s\n", g_config_filename);
+		} else {
+			fprintf(stderr, "Failed to write to config file %s: %s\n", g_config_filename, g_error_info_str);
+		}
 	}
 
 	fprintf(stderr,
@@ -532,26 +726,9 @@ int main(int argc, char ** argv)
 		printf("[main] Demo Mode Disabled\n");
 	}
 
-	start_server();
+	ensure_server_setup();
 
 	pthread_exit(NULL);
-}
-
-void teardown_server() {
-	printf("[main] Tearing down server...\n");
-
-	pthread_mutex_lock(&g_frame_data.mutex);
-	pthread_mutex_lock(&g_server_config.mutex);
-
-	if (g_frame_data.leds) {
-		ledscape_close(g_frame_data.leds);
-		g_frame_data.leds = NULL;
-	}
-
-	pthread_mutex_unlock(&g_server_config.mutex);
-	pthread_mutex_unlock(&g_frame_data.mutex);
-
-	printf("[main] Teardown Complete.\n");
 }
 
 const char* build_pruN_program_name(
@@ -573,55 +750,99 @@ const char* build_pruN_program_name(
 	return out_pru_filename;
 }
 
-const char* build_pru_program_name(uint8_t pruNum) {
-	char* output_buffer;
-	size_t buffer_size;
-
-	if (pruNum == 0) {
-		return build_pruN_program_name(
-			g_server_config.output_mode_name,
-			g_server_config.output_mapping_name,
-			0,
-			g_frame_data.pru0_program_filename,
-			sizeof(g_frame_data.pru0_program_filename)
-		);
-	} else if (pruNum == 1) {
-		return build_pruN_program_name(
-			g_server_config.output_mode_name,
-			g_server_config.output_mapping_name,
-			1,
-			g_frame_data.pru1_program_filename,
-			sizeof(g_frame_data.pru1_program_filename)
-		);
-	} else {
-		return NULL;
-	}
-}
-
-void start_server() {
-	printf("[main] Starting server...");
+void ensure_server_setup() {
+	printf("[main] Initializing / Updating server...");
 
 	// Setup tables
 	build_lookup_tables();
 	ensure_frame_data();
 
-	// Init LEDscape
-	g_frame_data.leds = ledscape_init_with_programs(
-		g_server_config.leds_per_strip,
-		build_pru_program_name(0),
-		build_pru_program_name(1)
-	);
+	pthread_mutex_lock(&g_runtime_state.mutex);
+	pthread_mutex_lock(&g_server_config.mutex);
+
+	// Determine if we need to [re]initialize LEDscape
+
+	bool ledscape_init_needed = false;
+
+	if (g_runtime_state.leds == NULL) {
+		ledscape_init_needed = true;
+	}
+	else if (g_runtime_state.leds_per_strip != g_server_config.leds_per_strip) {
+		ledscape_init_needed = true;
+	}
+	else if (g_runtime_state.pru1_program_filename == NULL || g_runtime_state.pru0_program_filename == NULL) {
+		ledscape_init_needed = true;
+	}
+	else {
+		char pru0_filename_temp[4096],
+			 pru1_filename_temp[4096];
+
+		build_pruN_program_name(
+			g_server_config.output_mode_name,
+			g_server_config.output_mapping_name,
+			0,
+			pru0_filename_temp,
+			sizeof(pru0_filename_temp)
+		);
+
+		build_pruN_program_name(
+			g_server_config.output_mode_name,
+			g_server_config.output_mapping_name,
+			1,
+			pru1_filename_temp,
+			sizeof(pru1_filename_temp)
+		);
+
+		if (strcasecmp(pru0_filename_temp, g_runtime_state.pru0_program_filename) != 0 ||
+			strcasecmp(pru1_filename_temp, g_runtime_state.pru1_program_filename) != 0) {
+			ledscape_init_needed = true;
+		}
+	}
+
+	if (ledscape_init_needed) {
+		if (g_runtime_state.leds != NULL) {
+			printf("[main] Closing LEDscape...");
+
+			ledscape_close(g_runtime_state.leds);
+			g_runtime_state.leds = NULL;
+		}
+
+		// Init LEDscape
+		printf("[main] Starting LEDscape...");
+		g_runtime_state.leds = ledscape_init_with_programs(
+			g_server_config.leds_per_strip,
+			build_pruN_program_name(
+				g_server_config.output_mode_name,
+				g_server_config.output_mapping_name,
+				0,
+				g_runtime_state.pru0_program_filename,
+				sizeof(g_runtime_state.pru0_program_filename)
+			),
+
+			build_pruN_program_name(
+				g_server_config.output_mode_name,
+				g_server_config.output_mapping_name,
+				1,
+				g_runtime_state.pru1_program_filename,
+				sizeof(g_runtime_state.pru1_program_filename)
+			)
+		);
+		g_runtime_state.leds_per_strip = g_server_config.leds_per_strip;
+	}
+
+	pthread_mutex_unlock(&g_server_config.mutex);
+	pthread_mutex_unlock(&g_runtime_state.mutex);
 
 	// Display server config as JSON
-	char json_buffer[4096] = {0};
-	server_config_to_json(json_buffer, &g_server_config);
+	char json_buffer[4096] = { 0 };
+	server_config_to_json(json_buffer, sizeof(json_buffer), &g_server_config);
 	fputs(json_buffer, stderr);
 }
 
 int validate_server_config(
 	server_config_t* input_config,
 	char * result_json_buffer,
-	int result_json_buffer_size
+	size_t result_json_buffer_size
 ) {
 	strlcpy(result_json_buffer, "{\n\t\"errors\": [", result_json_buffer_size);
 	char path_temp[4096];
@@ -692,8 +913,6 @@ int validate_server_config(
 				sizeof(path_temp)
 			);
 
-			int pru0_access = access( path_temp, R_OK );
-
 			if( access( path_temp, R_OK ) == -1 ) {
 				add_error(
 					"\n\t\t\"" "Invalid mapping and/or mode name; cannot access PRU %d program '%s'" "\",",
@@ -732,7 +951,7 @@ int validate_server_config(
 	assert_double_range_inclusive("Red White Point", 0, 1, input_config->white_point.red);
 
 	// whitePoint.green
-	assert_double_range_inclusive("Geen White Point", 0, 1, input_config->white_point.green);
+	assert_double_range_inclusive("Green White Point", 0, 1, input_config->white_point.green);
 
 	// whitePoint.blue
 	assert_double_range_inclusive("Blue White Point", 0, 1, input_config->white_point.blue);
@@ -756,84 +975,108 @@ int validate_server_config(
 	return error_count;
 }
 
-int server_config_from_json(const char* json, server_config_t* output_config) {
-	struct json_token *json_tokens, *token;
+int server_config_from_json(
+	const char* json,
+	size_t json_size,
+	server_config_t* output_config
+) {
+	struct json_token *json_tokens;
+	const struct json_token *token;
 	char token_value[4096];
 
+	if (json_size < 2) {
+		// No JSON data
+		return opc_server_set_error(
+			OPC_SERVER_ERR_NO_JSON,
+			NULL
+		);
+	}
+
 	// Tokenize json string, fill in tokens array
-	json_tokens = parse_json2(json, strlen(json));
+	json_tokens = parse_json2(json, json_size);
+
+	printf("tokens: %d: %s\n", json_size, json);
+
+	if (json_tokens == NULL) {
+		// Invalid JSON...
+		// TODO: Use parse_json with null token array to figure out where the problem is
+		return opc_server_set_error(
+			OPC_SERVER_ERR_INVALID_JSON,
+			NULL
+		);
+	}
 
 	// Search for parameter "bar" and print it's value
 	if ((token = find_json_token(json_tokens, "outputMode"))) {
-		strlcpy(output_config->output_mode_name, token->ptr, uint32_min(sizeof(g_server_config.output_mode_name), token->len + 1));
+		strlcpy(output_config->output_mode_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
 	}
 
 	if ((token = find_json_token(json_tokens, "outputMapping"))) {
-		strlcpy(output_config->output_mapping_name, token->ptr, uint32_min(sizeof(g_server_config.output_mode_name), token->len + 1));
+		strlcpy(output_config->output_mapping_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
 	}
 
 	if ((token = find_json_token(json_tokens, "demoMode"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->demo_mode = demo_mode_from_string(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "ledsPerStrip"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->leds_per_strip = atoi(token_value);
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->leds_per_strip = (uint32_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "usedStripCount"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->used_strip_count = atoi(token_value);
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->used_strip_count = (uint32_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "colorChannelOrder"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->color_channel_order = color_channel_order_from_string(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "opcTcpPort"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->tcp_port = atoi(token_value);
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->tcp_port = (uint16_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "opcUdpPort"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->udp_port = atoi(token_value);
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->udp_port = (uint16_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "enableInterpolation"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->interpolation_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->interpolation_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "enableDithering"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->dithering_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->dithering_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "enableLookupTable"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
-		output_config->lut_enabled = strcasecmp(token_value, "true") == 0 ? 1 : 0;
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->lut_enabled = strcasecmp(token_value, "true") == 0 ? TRUE : FALSE;
 	}
 
 	if ((token = find_json_token(json_tokens, "lumCurvePower"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->lum_power = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.red"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->white_point.red = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.green"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->white_point.green = atof(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "whitePoint.blue"))) {
-		strlcpy(token_value, token->ptr, uint32_min(sizeof(token_value), token->len + 1));
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
 		output_config->white_point.blue = atof(token_value);
 	}
 
@@ -843,10 +1086,11 @@ int server_config_from_json(const char* json, server_config_t* output_config) {
 	return 0;
 }
 
-void server_config_to_json(char* dest_string, server_config_t* input_config) {
+void server_config_to_json(char* dest_string, size_t dest_string_size, server_config_t* input_config) {
 	// Build config JSON
-	sprintf(
+	snprintf(
 		dest_string,
+		dest_string_size,
 
 		"{\n"
 			"\t" "\"outputMode\": \"%s\"," "\n"
@@ -855,7 +1099,7 @@ void server_config_to_json(char* dest_string, server_config_t* input_config) {
 
 			"\t" "\"ledsPerStrip\": %d," "\n"
 			"\t" "\"usedStripCount\": %d," "\n"
-			"\t" "\"colorChannelOrder\": %s," "\n"
+			"\t" "\"colorChannelOrder\": \"%s\"," "\n"
 
 			"\t" "\"opcTcpPort\": %d," "\n"
 			"\t" "\"opcUdpPort\": %d," "\n"
@@ -897,7 +1141,7 @@ void server_config_to_json(char* dest_string, server_config_t* input_config) {
 }
 
 void build_lookup_tables() {
-	pthread_mutex_lock(&g_frame_data.mutex);
+	pthread_mutex_lock(&g_runtime_state.mutex);
 	pthread_mutex_lock(&g_server_config.mutex);
 
 	float white_points[] = {
@@ -907,9 +1151,9 @@ void build_lookup_tables() {
 	};
 
 	uint32_t* lookup_tables[] = {
-		g_frame_data.red_lookup,
-		g_frame_data.green_lookup,
-		g_frame_data.blue_lookup
+		g_runtime_state.red_lookup,
+		g_runtime_state.green_lookup,
+		g_runtime_state.blue_lookup
 	};
 
 	for (uint16_t c=0; c<3; c++) {
@@ -918,15 +1162,15 @@ void build_lookup_tables() {
 			normalI *= white_points[c];
 
 			double output = pow(normalI, g_server_config.lum_power);
-			int64_t longOutput = (output * 0xFFFF) + 0.5;
-			int32_t clampedOutput = max(0, min(0xFFFF, longOutput));
+			int64_t longOutput = (int64_t) ((output * 0xFFFF) + 0.5);
+			int32_t clampedOutput = (int32_t) max(0, min(0xFFFF, longOutput));
 
-			lookup_tables[c][i] = clampedOutput;
+			lookup_tables[c][i] = (uint32_t) clampedOutput;
 		}
 	}
 
 	pthread_mutex_unlock(&g_server_config.mutex);
-	pthread_mutex_unlock(&g_frame_data.mutex);
+	pthread_mutex_unlock(&g_runtime_state.mutex);
 }
 
 /**
@@ -934,34 +1178,34 @@ void build_lookup_tables() {
  */
 void ensure_frame_data() {
 	pthread_mutex_lock(&g_server_config.mutex);
-	uint32_t led_count = g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS;
+	uint32_t led_count = (uint32_t)(g_server_config.leds_per_strip) * LEDSCAPE_NUM_STRIPS;
 	pthread_mutex_unlock(&g_server_config.mutex);
 
-	pthread_mutex_lock(&g_frame_data.mutex);
-	if (g_frame_data.frame_size != led_count) {
-		fprintf(stderr, "Allocating buffers for %d pixels (%d bytes)\n", led_count, led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t));
+	pthread_mutex_lock(&g_runtime_state.mutex);
+	if (g_runtime_state.frame_size != led_count) {
+		fprintf(stderr, "Allocating buffers for %d pixels (%lu bytes)\n", led_count, led_count * 3 /*channels*/ * 4 /*buffers*/ * sizeof(uint16_t));
 
-		if (g_frame_data.previous_frame_data != NULL) {
-			free(g_frame_data.previous_frame_data);
-			free(g_frame_data.current_frame_data);
-			free(g_frame_data.next_frame_data);
-			free(g_frame_data.frame_dithering_overflow);
+		if (g_runtime_state.previous_frame_data != NULL) {
+			free(g_runtime_state.previous_frame_data);
+			free(g_runtime_state.current_frame_data);
+			free(g_runtime_state.next_frame_data);
+			free(g_runtime_state.frame_dithering_overflow);
 		}
 
-		g_frame_data.frame_size = led_count;
-		g_frame_data.previous_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
-		g_frame_data.current_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
-		g_frame_data.next_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
-		g_frame_data.frame_dithering_overflow = malloc(led_count * sizeof(pixel_delta_t));
-		g_frame_data.has_next_frame = FALSE;
-		printf("frame_size1=%u\n", g_frame_data.frame_size);
+		g_runtime_state.frame_size = led_count;
+		g_runtime_state.previous_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
+		g_runtime_state.current_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
+		g_runtime_state.next_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
+		g_runtime_state.frame_dithering_overflow = malloc(led_count * sizeof(pixel_delta_t));
+		g_runtime_state.has_next_frame = FALSE;
+		printf("frame_size1=%u\n", g_runtime_state.frame_size);
 
 		// Init timestamps
-		gettimeofday(&g_frame_data.previous_frame_tv, NULL);
-		gettimeofday(&g_frame_data.current_frame_tv, NULL);
-		gettimeofday(&g_frame_data.next_frame_tv, NULL);
+		gettimeofday(&g_runtime_state.previous_frame_tv, NULL);
+		gettimeofday(&g_runtime_state.current_frame_tv, NULL);
+		gettimeofday(&g_runtime_state.next_frame_tv, NULL);
 	}
-	pthread_mutex_unlock(&g_frame_data.mutex);
+	pthread_mutex_unlock(&g_runtime_state.mutex);
 }
 
 /**
@@ -972,147 +1216,82 @@ void set_next_frame_data(
 	uint32_t data_size,
 	uint8_t is_remote
 ) {
-	pthread_mutex_lock(&g_frame_data.mutex);
+	pthread_mutex_lock(&g_runtime_state.mutex);
 
 	rotate_frames(FALSE);
 
 	// Prevent buffer overruns
-	data_size = min(data_size, g_frame_data.frame_size * 3);
+	data_size = min(data_size, g_runtime_state.frame_size * 3);
 
 	// Copy in new data
-	memcpy(g_frame_data.next_frame_data, frame_data, data_size);
+	memcpy(g_runtime_state.next_frame_data, frame_data, data_size);
 
 	// Zero out any pixels not set by the new frame
-	memset((uint8_t*)g_frame_data.next_frame_data + data_size, 0, (g_frame_data.frame_size*3 - data_size));
+	memset((uint8_t*) g_runtime_state.next_frame_data + data_size, 0, (g_runtime_state.frame_size*3 - data_size));
 
 	// Update the timestamp & count
-	gettimeofday(&g_frame_data.next_frame_tv, NULL);
+	gettimeofday(&g_runtime_state.next_frame_tv, NULL);
 
 	// Update remote data timestamp if applicable
 	if (is_remote) {
-		gettimeofday(&g_frame_data.last_remote_data_tv, NULL);
+		gettimeofday(&g_runtime_state.last_remote_data_tv, NULL);
 	}
 
-	g_frame_data.has_next_frame = TRUE;
+	g_runtime_state.has_next_frame = TRUE;
 
-	pthread_mutex_unlock(&g_frame_data.mutex);
-}
-
-/**
- * Set a single channel in the next frame of data to be displayed, keeping current values.
- */
-void set_next_frame_single_channel_data(
-	uint8_t channel_index,
-	uint8_t* frame_data,
-	uint32_t data_size,
-	uint8_t is_remote
-) {
-	pthread_mutex_lock(&g_frame_data.mutex);
-
-	rotate_frames(FALSE);
-
-	buffer_pixel_t* old_frame_data = NULL;
-
-	// Where will we be putting the new data
-	if (g_frame_data.has_current_frame) {
-		old_frame_data = g_frame_data.current_frame_data;
-	} else if (g_frame_data.has_prev_frame) {
-		old_frame_data = g_frame_data.previous_frame_data;
-	}
-
-	// Copy the data to the next frame buffer
-	if (old_frame_data != NULL) {
-		memcpy(
-			g_frame_data.next_frame_data,
-			old_frame_data,
-			g_frame_data.frame_size * sizeof(buffer_pixel_t)
-		);
-	}
-
-	// Copy in the new channel data
-	uint32_t pixel_count = g_frame_data.frame_size / LEDSCAPE_NUM_STRIPS;
-
-	uint32_t buffer_offset = channel_index * pixel_count * sizeof(buffer_pixel_t);
-	uint32_t copy_size = min(data_size, pixel_count * sizeof(buffer_pixel_t));
-
-
-	if (buffer_offset + copy_size <= g_frame_data.frame_size * sizeof(buffer_pixel_t)) {
-		memcpy(
-			(uint8_t*)g_frame_data.next_frame_data + buffer_offset,
-			frame_data,
-			copy_size
-		);
-
-//		printf("Writing %d bytes, channel %d, offset %d: ", copy_size, channel_index, buffer_offset);
-//		for (int i=0; i<copy_size; i++) {
-//			printf("%03d ", frame_data[i]);
-//		}
-//		printf("\n");
-	}
-
-	// Update the timestamp & count
-	gettimeofday(&g_frame_data.next_frame_tv, NULL);
-
-	// Update remote data timestamp if applicable
-	if (is_remote) {
-		gettimeofday(&g_frame_data.last_remote_data_tv, NULL);
-	}
-
-	g_frame_data.has_next_frame = TRUE;
-
-	pthread_mutex_unlock(&g_frame_data.mutex);
+	pthread_mutex_unlock(&g_runtime_state.mutex);
 }
 
 /**
  * Rotate the buffers, dropping the previous frame and loading in the new one
  */
 void rotate_frames(uint8_t lock_frame_data) {
-	if (lock_frame_data) pthread_mutex_lock(&g_frame_data.mutex);
+	if (lock_frame_data) pthread_mutex_lock(&g_runtime_state.mutex);
 
 	buffer_pixel_t* temp = NULL;
 
-	g_frame_data.has_prev_frame = FALSE;
+	g_runtime_state.has_prev_frame = FALSE;
 
-	if (g_frame_data.has_current_frame) {
-		g_frame_data.previous_frame_tv = g_frame_data.current_frame_tv;
+	if (g_runtime_state.has_current_frame) {
+		g_runtime_state.previous_frame_tv = g_runtime_state.current_frame_tv;
 
-		temp = g_frame_data.previous_frame_data;
-		g_frame_data.previous_frame_data = g_frame_data.current_frame_data;
-		g_frame_data.current_frame_data = temp;
+		temp = g_runtime_state.previous_frame_data;
+		g_runtime_state.previous_frame_data = g_runtime_state.current_frame_data;
+		g_runtime_state.current_frame_data = temp;
 
-		g_frame_data.has_prev_frame = TRUE;
-		g_frame_data.has_current_frame = FALSE;
+		g_runtime_state.has_prev_frame = TRUE;
+		g_runtime_state.has_current_frame = FALSE;
 	}
 
-	if (g_frame_data.has_next_frame) {
-		g_frame_data.current_frame_tv = g_frame_data.next_frame_tv;
+	if (g_runtime_state.has_next_frame) {
+		g_runtime_state.current_frame_tv = g_runtime_state.next_frame_tv;
 
-		temp = g_frame_data.current_frame_data;
-		g_frame_data.current_frame_data = g_frame_data.next_frame_data;
-		g_frame_data.next_frame_data = temp;
+		temp = g_runtime_state.current_frame_data;
+		g_runtime_state.current_frame_data = g_runtime_state.next_frame_data;
+		g_runtime_state.next_frame_data = temp;
 
-		g_frame_data.has_current_frame = TRUE;
-		g_frame_data.has_next_frame = FALSE;
+		g_runtime_state.has_current_frame = TRUE;
+		g_runtime_state.has_next_frame = FALSE;
 	}
 
 	// Update the delta time stamp
-	if (g_frame_data.has_current_frame && g_frame_data.has_prev_frame) {
+	if (g_runtime_state.has_current_frame && g_runtime_state.has_prev_frame) {
 		timersub(
-			&g_frame_data.current_frame_tv,
-			&g_frame_data.previous_frame_tv,
-			&g_frame_data.prev_current_delta_tv
+			&g_runtime_state.current_frame_tv,
+			&g_runtime_state.previous_frame_tv,
+			&g_runtime_state.prev_current_delta_tv
 		);
 	}
 
-	if (lock_frame_data) pthread_mutex_unlock(&g_frame_data.mutex);
+	if (lock_frame_data) pthread_mutex_unlock(&g_runtime_state.mutex);
 }
 
-inline uint16_t lutInterpolate(uint16_t value, uint32_t* lut) {
+inline uint32_t lutInterpolate(uint32_t value, uint32_t* lut) {
 	// Inspired by FadeCandy: https://github.com/scanlime/fadecandy/blob/master/firmware/fc_pixel_lut.cpp
 
-	uint16_t index = value >> 8; // Range [0, 0xFF]
-	uint16_t alpha = value & 0xFF; // Range [0, 0xFF]
-	uint16_t invAlpha = 0x100 - alpha; // Range [1, 0x100]
+	uint32_t index = value >> 8; // Range [0, 0xFF]
+	uint32_t alpha = value & 0xFF; // Range [0, 0xFF]
+	uint32_t invAlpha = 0x100 - alpha; // Range [1, 0x100]
 
 	// Result in range [0, 0xFFFF]
 	return (lut[index] * invAlpha + lut[index + 1] * alpha) >> 8;
@@ -1127,47 +1306,47 @@ void* render_thread(void* unused_data)
 	struct timeval frame_progress_tv, now_tv;
 	uint16_t frame_progress16, inv_frame_progress16;
 
-	const unsigned report_interval = 10;
-	unsigned last_report = 0;
-	unsigned long delta_sum = 0;
-	unsigned frames = 0;
-	uint32_t delta_avg = 2000;
+	const unsigned fps_report_interval_seconds = 10;
+	uint64_t last_report = 0;
+	uint64_t frame_duration_sum_usec = 0;
+	uint32_t frames_since_last_fps_report = 0;
+	uint64_t frame_duration_avg_usec = 2000;
 
 	uint8_t buffer_index = 0;
 	int8_t ditheringFrame = 0;
 	for(;;) {
-		pthread_mutex_lock(&g_frame_data.mutex);
+		pthread_mutex_lock(&g_runtime_state.mutex);
 
 		// Increment the frame counter
-		__sync_fetch_and_add(&g_frame_data.frame_counter, 1);
+		g_runtime_state.frame_counter++;
 
 		// Wait until LEDscape is initialized
-		if (g_frame_data.leds == NULL) {
+		if (g_runtime_state.leds == NULL) {
 			printf("[render] Awaiting server initialization...\n");
-			pthread_mutex_unlock(&g_frame_data.mutex);
+			pthread_mutex_unlock(&g_runtime_state.mutex);
 			usleep(1e6 /* 1s */);
 			continue;
 		}
 
 		// Skip frames if there isn't enough data
-		if (!g_frame_data.has_prev_frame || !g_frame_data.has_current_frame) {
-			pthread_mutex_unlock(&g_frame_data.mutex);
+		if (!g_runtime_state.has_prev_frame || !g_runtime_state.has_current_frame) {
+			pthread_mutex_unlock(&g_runtime_state.mutex);
 			usleep(10e3 /* 10ms */);
 			continue;
 		}
 
 		// Calculate the time delta and current percentage (as a 16-bit value)
 		gettimeofday(&now_tv, NULL);
-		timersub(&now_tv, &g_frame_data.next_frame_tv, &frame_progress_tv);
+		timersub(&now_tv, &g_runtime_state.next_frame_tv, &frame_progress_tv);
 
 		// Calculate current frame and previous frame time
-		uint64_t frame_progress_us = frame_progress_tv.tv_sec*1e6 + frame_progress_tv.tv_usec;
-		uint64_t last_frame_time_us = g_frame_data.prev_current_delta_tv.tv_sec*1e6 + g_frame_data.prev_current_delta_tv.tv_usec;
+		uint64_t frame_progress_us = (uint64_t) (frame_progress_tv.tv_sec*1e6 + frame_progress_tv.tv_usec);
+		uint64_t last_frame_time_us = (uint64_t) (g_runtime_state.prev_current_delta_tv.tv_sec*1e6 + g_runtime_state.prev_current_delta_tv.tv_usec);
 
 		// Check for current frame exhaustion
 		if (frame_progress_us > last_frame_time_us) {
-			uint8_t has_next_frame = g_frame_data.has_next_frame;
-			pthread_mutex_unlock(&g_frame_data.mutex);
+			uint8_t has_next_frame = g_runtime_state.has_next_frame;
+			pthread_mutex_unlock(&g_runtime_state.mutex);
 
 			// This should only happen in a final frame case -- to avoid early switching (and some nasty resulting
 			// artifacts) we only force frame rotation if the next frame is really late.
@@ -1184,29 +1363,30 @@ void* render_thread(void* unused_data)
 			continue;
 		}
 
-		frame_progress16 = (frame_progress_us << 16) / last_frame_time_us;
-		inv_frame_progress16 = 0xFFFF - frame_progress16;
+		frame_progress16 = (uint16_t) ((frame_progress_us << 16) / last_frame_time_us);
+		inv_frame_progress16 = (uint16_t) (0xFFFF - frame_progress16);
 
 		if (frame_progress_tv.tv_sec > 5) {
 			printf("[render] No data for 5 seconds; suspending render thread.\n");
-			pthread_mutex_unlock(&g_frame_data.mutex);
+			pthread_mutex_unlock(&g_runtime_state.mutex);
 			usleep(100e3 /* 100ms */);
 			continue;
 		}
 
 		// printf("%d of %d (%d)\n",
 		// 	(frame_progress_tv.tv_sec*1000000 + frame_progress_tv.tv_usec) ,
-		// 	(g_frame_data.prev_current_delta_tv.tv_sec*1000000 + g_frame_data.prev_current_delta_tv.tv_usec),
+		// 	(g_runtime_state.prev_current_delta_tv.tv_sec*1000000 + g_runtime_state.prev_current_delta_tv.tv_usec),
 		// 	frame_progress16
 		// );
 
 		// Setup LEDscape for this frame
 		buffer_index = (buffer_index+1)%2;
-		ledscape_frame_t * const frame = ledscape_frame(g_frame_data.leds, buffer_index);
+
+		ledscape_frame_t * const frame = ledscape_frame(g_runtime_state.leds, buffer_index);
 
 		// Build the render frame
-		uint16_t led_count = g_frame_data.frame_size;
-		uint16_t leds_per_strip = led_count / LEDSCAPE_NUM_STRIPS;
+		uint32_t led_count = g_runtime_state.frame_size;
+		uint32_t leds_per_strip = led_count / LEDSCAPE_NUM_STRIPS;
 		uint32_t data_index = 0;
 
 		// Update the dithering frame counter
@@ -1216,7 +1396,7 @@ void* render_thread(void* unused_data)
 		struct timeval start_tv, stop_tv, delta_tv;
 		gettimeofday(&start_tv, NULL);
 
-		uint16_t used_strip_count;
+		uint32_t used_strip_count;
 
 		// Check the server config for dithering and interpolation options
 		pthread_mutex_lock(&g_server_config.mutex);
@@ -1225,22 +1405,22 @@ void* render_thread(void* unused_data)
 		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_NUM_STRIPS);
 
 		// Only enable dithering if we're better than 100fps
-		uint8_t dithering_enabled = (delta_avg < 10000) && g_server_config.dithering_enabled;
-		uint8_t interpolation_enabled = g_server_config.interpolation_enabled;
-		uint8_t lut_enabled = g_server_config.lut_enabled;
+		bool dithering_enabled = (frame_duration_avg_usec < 10000) && g_server_config.dithering_enabled;
+		bool interpolation_enabled = g_server_config.interpolation_enabled;
+		bool lut_enabled = g_server_config.lut_enabled;
 
 		color_channel_order_t color_channel_order = g_server_config.color_channel_order;
 
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		// Only allow dithering to take effect if it blinks faster than 60fps
-		uint32_t maxDitherFrames = 16667 / delta_avg;
+		uint32_t maxDitherFrames = 16667 / frame_duration_avg_usec;
 
 		for (uint32_t strip_index=0; strip_index<used_strip_count; strip_index++) {
 			for (uint32_t led_index=0; led_index<leds_per_strip; led_index++, data_index++) {
-				buffer_pixel_t* pixel_in_prev = &g_frame_data.previous_frame_data[data_index];
-				buffer_pixel_t* pixel_in_current = &g_frame_data.current_frame_data[data_index];
-				pixel_delta_t* pixel_in_overflow = &g_frame_data.frame_dithering_overflow[data_index];
+				buffer_pixel_t* pixel_in_prev = &g_runtime_state.previous_frame_data[data_index];
+				buffer_pixel_t* pixel_in_current = &g_runtime_state.current_frame_data[data_index];
+				pixel_delta_t* pixel_in_overflow = &g_runtime_state.frame_dithering_overflow[data_index];
 
 				ledscape_pixel_t* const pixel_out = & frame[led_index].strip[strip_index];
 
@@ -1261,9 +1441,9 @@ void* render_thread(void* unused_data)
 
 				// Apply LUT
 				if (lut_enabled) {
-					interpolatedR = lutInterpolate(interpolatedR, g_frame_data.red_lookup);
-					interpolatedG = lutInterpolate(interpolatedG, g_frame_data.green_lookup);
-					interpolatedB = lutInterpolate(interpolatedB, g_frame_data.blue_lookup);
+					interpolatedR = lutInterpolate((uint32_t) interpolatedR, g_runtime_state.red_lookup);
+					interpolatedG = lutInterpolate((uint32_t) interpolatedG, g_runtime_state.green_lookup);
+					interpolatedB = lutInterpolate((uint32_t) interpolatedB, g_runtime_state.blue_lookup);
 				}
 
 				// Reset dithering for this pixel if it's been too long since it actually changed anything. This serves to prevent
@@ -1295,9 +1475,9 @@ void* render_thread(void* unused_data)
 				}
 
 				// Calculate and assign output values
-				uint8_t r = min((ditheredR+0x80) >> 8, 255);
-				uint8_t g = min((ditheredG+0x80) >> 8, 255);
-				uint8_t b = min((ditheredB+0x80) >> 8, 255);
+				uint8_t r = (uint8_t) min((ditheredR+0x80) >> 8, 255);
+				uint8_t g = (uint8_t) min((ditheredG+0x80) >> 8, 255);
+				uint8_t b = (uint8_t) min((ditheredB+0x80) >> 8, 255);
 
 				ledscape_pixel_set_color(
 					pixel_out,
@@ -1321,46 +1501,47 @@ void* render_thread(void* unused_data)
 				// we use temporary variables, r, g, and b. It probably has to do with things being loaded into the CPU cache
 				// when read, as such, don't read pixel_out from here.
 				if (dithering_enabled) {
-					pixel_in_overflow->r = (int16_t)ditheredR - (r * 257);
-					pixel_in_overflow->g = (int16_t)ditheredG - (g * 257);
-					pixel_in_overflow->b = (int16_t)ditheredB - (b * 257);
+					pixel_in_overflow->r = (uint8_t) ((int16_t)ditheredR - (r * 257));
+					pixel_in_overflow->g = (uint8_t) ((int16_t)ditheredG - (g * 257));
+					pixel_in_overflow->b = (uint8_t) ((int16_t)ditheredB - (b * 257));
 				}
 			}
 		}
 
 		// Render the frame
-		ledscape_wait(g_frame_data.leds);
-		ledscape_draw(g_frame_data.leds, buffer_index);
+		ledscape_wait(g_runtime_state.leds);
+		ledscape_draw(g_runtime_state.leds, buffer_index);
 
-		pthread_mutex_unlock(&g_frame_data.mutex);
+		pthread_mutex_unlock(&g_runtime_state.mutex);
 
 		// Output Timing Info
 		gettimeofday(&stop_tv, NULL);
 		timersub(&stop_tv, &start_tv, &delta_tv);
 
-		frames++;
-		delta_sum += delta_tv.tv_usec;
-		if (stop_tv.tv_sec - last_report < report_interval)
-			continue;
-		last_report = stop_tv.tv_sec;
+		frames_since_last_fps_report++;
+		frame_duration_sum_usec += delta_tv.tv_usec;
+		if (stop_tv.tv_sec - last_report >= fps_report_interval_seconds) {
+			last_report = stop_tv.tv_sec;
 
-		delta_avg = delta_sum / frames;
-		printf("[render] fps_info={frame_avg_usec: %6u, possible_fps: %.2f, actual_fps: %.2f, sample_frames: %u}\n",
-			delta_avg,
-			(1.0e6 / delta_avg),
-			frames * 1.0 / report_interval,
-			frames
-		);
+			frame_duration_avg_usec = frame_duration_sum_usec / frames_since_last_fps_report;
+			printf("[render] fps_info={frame_avg_usec: %qu, possible_fps: %.2f, actual_fps: %.2f, sample_frames: %u}\n",
+				frame_duration_avg_usec,
+				(1.0e6 / frame_duration_avg_usec),
+				frames_since_last_fps_report * 1.0 / fps_report_interval_seconds,
+				frames_since_last_fps_report
+			);
 
-		frames = delta_sum = 0;
+			frames_since_last_fps_report = 0;
+			frame_duration_sum_usec = 0;
+		}
 	}
 
-	ledscape_close(g_frame_data.leds);
+	ledscape_close(g_runtime_state.leds);
 	pthread_exit(NULL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Server Common
+// OPC Protocol Structures
 
 typedef struct
 {
@@ -1439,9 +1620,9 @@ void HSBtoRGB(int32_t hue, int32_t sat, int32_t val, uint8_t out[]) {
 		break;
 		}
 
-		out[0] = r;
-		out[1] = g;
-		out[2] = b;
+		out[0] = (uint8_t) r;
+		out[1] = (uint8_t) g;
+		out[2] = (uint8_t) b;
 	}
 }
 
@@ -1456,12 +1637,13 @@ void* demo_thread(void* unused_data)
 	struct timeval now_tv, delta_tv;
 	uint8_t demo_enabled = FALSE;
 
+	#pragma clang diagnostic ignored "-Wmissing-noreturn"
 	for (uint16_t i = 0; /*ever*/; i+=400) {
 		// Calculate time since last remote data
-		pthread_mutex_lock(&g_frame_data.mutex);
+		pthread_mutex_lock(&g_runtime_state.mutex);
 			gettimeofday(&now_tv, NULL);
-			timersub(&now_tv, &g_frame_data.last_remote_data_tv, &delta_tv);
-		pthread_mutex_unlock(&g_frame_data.mutex);
+			timersub(&now_tv, &g_runtime_state.last_remote_data_tv, &delta_tv);
+		pthread_mutex_unlock(&g_runtime_state.mutex);
 
 		pthread_mutex_lock(&g_server_config.mutex);
 			uint32_t leds_per_strip = g_server_config.leds_per_strip;
@@ -1495,18 +1677,30 @@ void* demo_thread(void* unused_data)
 			{
 				for (uint16_t p = 0 ; p < leds_per_strip; p++, data_index+=3)
 				{
-					if (demo_mode == IDENTIFY) {
-						// Set the pixel to the strip index unless the pixel has the same index as the strip, then
-						// light it up grey with bit value: 1010 1010
-						buffer[data_index] = buffer[data_index+1] = buffer[data_index+2]
-							= (strip == p) ? 170 : strip;
-					} else if (demo_mode == FADE) {
-						HSBtoRGB(
-							((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
-							200,
-							128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
-							&buffer[data_index]
-						);
+					switch (demo_mode) {
+						case NONE: {
+							buffer[data_index] =
+								buffer[data_index+1] =
+								buffer[data_index+2] = 0;
+						} break;
+
+						case IDENTIFY: {
+							// Set the pixel to the strip index unless the pixel has the same index as the strip, then
+							// light it up grey with bit value: 1010 1010
+							buffer[data_index] =
+								buffer[data_index+1] =
+								buffer[data_index+2] =
+								(uint8_t) ((strip == p) ? 170 : strip);
+						} break;
+
+						case FADE: {
+							HSBtoRGB(
+								((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
+								200,
+								128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
+								&buffer[data_index]
+							);
+						} break;
 					}
 				}
 			}
@@ -1516,6 +1710,7 @@ void* demo_thread(void* unused_data)
 
 		usleep(1e6);
 	}
+#pragma clang diagnostic pop
 
 	pthread_exit(NULL);
 }
@@ -1621,7 +1816,7 @@ void* e131_server_thread(void* unused_data)
 	uint32_t dmx_buffer_size = 0;
 
 	uint32_t packets_since_update = 0;
-	uint32_t frame_counter_at_last_update = g_frame_data.frame_counter;
+	uint32_t frame_counter_at_last_update = g_runtime_state.frame_counter;
 
 	while (1)
 	{
@@ -1691,14 +1886,14 @@ void* e131_server_thread(void* unused_data)
 
 		// Increment counter
 		packets_since_update ++;
-		if (g_frame_data.frame_counter != frame_counter_at_last_update) {
+		if (g_runtime_state.frame_counter != frame_counter_at_last_update) {
 			packets_since_update = 0;
-			frame_counter_at_last_update = g_frame_data.frame_counter;
+			frame_counter_at_last_update = g_runtime_state.frame_counter;
 		}
 
 		if (packets_since_update >= LEDSCAPE_NUM_STRIPS) {
 			// Force an update here
-			while (g_frame_data.frame_counter == frame_counter_at_last_update)
+			while (g_runtime_state.frame_counter == frame_counter_at_last_update)
 				usleep(1e3 /* 1ms */);
 		}
 	}
@@ -1728,7 +1923,7 @@ void* udp_server_thread(void* unused_data)
 			g_server_config.used_strip_count * g_server_config.leds_per_strip
 		);
 		pthread_exit(NULL);
-		return;
+		return NULL;
 	}
 
 	fprintf(stderr, "[udp] Starting UDP server on port %d\n", g_server_config.udp_port);
@@ -1882,3 +2077,6 @@ void* tcp_server_thread(void* unused_data)
 	ns_server_free(&server);
 	pthread_exit(NULL);
 }
+
+#pragma clang diagnostic pop
+#pragma clang diagnostic pop

@@ -39,7 +39,9 @@ CFLAGS += \
 	-mtune=cortex-a8 \
 	-march=armv7-a \
 	-Wunused-parameter \
-	-DNS_ENABLE_IPV6
+	-DNS_ENABLE_IPV6 \
+	-Wunknown-pragmas \
+	-Wsign-compare
 
 LDFLAGS += \
 
