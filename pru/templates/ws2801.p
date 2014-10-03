@@ -153,9 +153,9 @@ l_word_loop:
 	WAITNS 1200, end_of_frame_clear_wait
 	GPIO_APPLY_MASK_TO_ADDR()
 
-	// Delay at least 50 usec; this is the required reset
+	// Delay at least 500 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.
-	SLEEPNS 50000, 1, reset_time
+	SLEEPNS 7500000, 1, reset_time
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
