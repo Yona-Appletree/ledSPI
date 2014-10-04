@@ -1708,7 +1708,7 @@ void* demo_thread(void* unused_data)
 			set_next_frame_data(buffer, buffer_size, FALSE);
 		}
 
-		usleep(30000);
+		usleep(1e6);
 	}
 #pragma clang diagnostic pop
 
