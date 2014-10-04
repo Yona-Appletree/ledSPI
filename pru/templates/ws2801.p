@@ -155,7 +155,7 @@ l_word_loop:
 
 	// Delay at least 500 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.
-	SLEEPNS 750000, 1, reset_time
+	SLEEPNS 1000000, 1, reset_time
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
