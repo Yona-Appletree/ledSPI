@@ -143,7 +143,6 @@ with `--udp-port <port>`. Entering `0` for a port number will disable that serve
 Note that if using the UDP server, `opc-server` will limit the number of pixels to 21835, or 454 pixels per port if
 using all 48 ports.
 
-
 Output Modes
 ------------
 LEDscape is capable of outputting several types of signal. By default, a ws2811-compatible signal is generated. The
@@ -193,6 +192,17 @@ Invocation Examples
 | 24 strips, 512 pixels, ws2801 | ./opc-server --strip-count 24 --count 512 --mode ws2801
 | 8 outputs, 170 pixels, dmx    | ./opc-server --strip-count 8 --count 170 --mode dmx
 
+
+JSON Configuration
+------------------
+
+Use the command below to create and execute the JSON configuration
+
+	./opc-server --config ws281x-config.json --mapping rgb-123-v2 --mode ws281x --count 64 --strip-count 48
+
+With this JSON configured it can be called again by issuing the command
+
+	./opc-server --config ws281x-config.json
 
 Processing Example
 ========
