@@ -128,6 +128,17 @@ By default LEDscape is configured for strings of 256 WS2811 pixels, accepting OP
 data on port 7890. You can adjust this by editing `run-ledscape` and 
 editing the parameters to `opc-server`
 
+JSON Configuration
+------------------
+
+Use the command below to create and execute the JSON configuration
+
+	./opc-server --config ws281x-config.json --mapping rgb-123-v2 --mode ws281x --count 64 --strip-count 48
+
+With this JSON configured it can be called again by issuing the command
+
+	./opc-server --config ws281x-config.json
+
 
 Data Format
 -----------
