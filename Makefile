@@ -49,7 +49,7 @@ LDLIBS += \
 	-lpthread \
 
 COMPILE.o = $(CROSS_COMPILE)gcc $(CFLAGS) -c -o $@ $<
-COMPILE.a = $(CROSS_COMPILE)gcc -c -o $@ $<
+COMPILE.a = $(CROSS_COMPILE)ar crv $@ $^
 COMPILE.link = $(CROSS_COMPILE)gcc $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 
@@ -91,6 +91,10 @@ all_pru_templates: $(EXPANDED_PRU_TEMPLATES)
 
 %.o: %.c
 	$(COMPILE.o)
+
+libledscape.a: $(LEDSCAPE_OBJS)
+	$(RM) $@
+	$(COMPILE.a)
 
 $(foreach O,$(TARGETS),$(eval $O: $O.o $(LEDSCAPE_OBJS) $(APP_LOADER_LIB)))
 
