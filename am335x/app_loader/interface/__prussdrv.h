@@ -1,36 +1,36 @@
 /*
  * __prussdrv.h
- * 
  *
- * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/ 
- * 
- * 
- *  Redistribution and use in source and binary forms, with or without 
- *  modification, are permitted provided that the following conditions 
+ *
+ * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
+ *
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
  *  are met:
  *
- *    Redistributions of source code must retain the above copyright 
+ *    Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  *
  *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the 
- *    documentation and/or other materials provided with the   
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the
  *    distribution.
  *
  *    Neither the name of Texas Instruments Incorporated nor the names of
  *    its contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
 */
@@ -65,8 +65,9 @@
 
 #define	PAGE_SIZE                     4096
 
-#define PRUSS_V1                    1
-#define PRUSS_V2                    2
+#define PRUSS_V1_STR                  "AM18XX"
+#define PRUSS_V2_STR                  "AM33XX"
+#define PRUSS_UNKNOWN_STR             "UNKNOWN"
 
 #define AM33XX_PRUSS_INTC_REV         0x4E82A900
 #define AM18XX_PRUSS_INTC_REV         0x4E825900
@@ -162,7 +163,7 @@
 
 #define MAX_HOSTS_SUPPORTED	10
 
-//UIO driver expects user space to map PRUSS_UIO_MAP_OFFSET_XXX to 
+//UIO driver expects user space to map PRUSS_UIO_MAP_OFFSET_XXX to
 //access corresponding memory regions - region offset is N*PAGE_SIZE
 
 #define PRUSS_UIO_MAP_OFFSET_PRUSS 0*PAGE_SIZE
@@ -203,7 +204,6 @@ typedef struct __prussdrv {
     void *pru1_iram_base;
     void *l3ram_base;
     void *extram_base;
-    pthread_t irq_thread[NUM_PRU_HOSTIRQS];
     int mmap_fd;
     void *pruss_sharedram_base;
     void *pruss_cfg_base;
@@ -236,6 +236,7 @@ typedef struct __prussdrv {
     unsigned int l3ram_map_size;
     unsigned int extram_phys_base;
     unsigned int extram_map_size;
+    tpruss_intc_initdata intc_data;
 } tprussdrv;
 
 
@@ -255,8 +256,8 @@ int __pruss_detect_hw_version(unsigned int *pruss_io)
     }
 }
 
-void __prussintc_set_cmr(unsigned int *pruintc_io, unsigned short sysevt,
-                         unsigned short channel)
+void __prussintc_set_cmr(volatile unsigned int *pruintc_io, 
+                         unsigned short sysevt, unsigned short channel)
 {
     pruintc_io[(PRU_INTC_CMR1_REG + (sysevt & ~(0x3))) >> 2] |=
         ((channel & 0xF) << ((sysevt & 0x3) << 3));
@@ -264,8 +265,8 @@ void __prussintc_set_cmr(unsigned int *pruintc_io, unsigned short sysevt,
 }
 
 
-void __prussintc_set_hmr(unsigned int *pruintc_io, unsigned short channel,
-                         unsigned short host)
+void __prussintc_set_hmr(volatile unsigned int *pruintc_io, 
+                         unsigned short channel, unsigned short host)
 {
     pruintc_io[(PRU_INTC_HMR1_REG + (channel & ~(0x3))) >> 2] =
         pruintc_io[(PRU_INTC_HMR1_REG +

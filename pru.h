@@ -46,10 +46,12 @@ pru_close(
 );
 
 
+/**
+* Await an interrupt from one of the PRUs. Note that as far as I can tell, we have not way of telling
+* which PRU an interrupt comes from; we only receive them on the EVTOUT_NUM passed to prussdrv_open()
+*/
 extern void
-pru_wait_interrupt(
-  pru_t * const pru
-);
+	pru_wait_interrupt();
 
 /** Configure a GPIO pin.
  *

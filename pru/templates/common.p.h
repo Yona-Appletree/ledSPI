@@ -231,6 +231,15 @@ lab:
 		// LBBO r_sleep_counter, r_temp_addr, 0xC, 4
 .endm
 
+/* Send an interrupt to the ARM*/
+.macro RAISE_ARM_INTERRUPT
+	#ifdef AM33XX
+		MOV R31.b0, PRU_ARM_INTERRUPT+16
+	#else
+		MOV R31.b0, PRU_ARM_INTERRUPT
+	#endif
+.endm
+
 // ***************************************
 // *         LED Mapping Macros          *
 // ***************************************

@@ -12,8 +12,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-#include <prussdrv.h>
-#include <pruss_intc_mapping.h>
+#include "am335x/app_loader/include/prussdrv.h"
+#include "am335x/app_loader/include/pruss_intc_mapping.h"
 #include "pru.h"
 
 
@@ -120,10 +120,11 @@ pru_exec(
 }
 
 void
-pru_wait_interrupt(pru_t * const pru) {
-    prussdrv_pru_wait_event (PRU_EVTOUT_0);
-    // Handle event
-    prussdrv_pru_clear_event (PRU0_ARM_INTERRUPT);
+pru_wait_interrupt() {
+	prussdrv_pru_wait_event(PRU_EVTOUT_0);
+	// Handle event
+	prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
+	prussdrv_pru_clear_event(PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
 }
 
 void
@@ -132,8 +133,7 @@ pru_close(
 )
 {
 	// \todo unmap memory
-	prussdrv_pru_wait_event(PRU_EVTOUT_0);
-	prussdrv_pru_clear_event(PRU0_ARM_INTERRUPT);
+	pru_wait_interrupt();
 	prussdrv_pru_disable(pru->pru_num); 
 	prussdrv_exit();
 }

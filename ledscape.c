@@ -108,28 +108,21 @@ ledscape_draw(
 /** Wait for the current frame to finish transfering to the strips.
  * \returns a token indicating the response code.
  */
-uint32_t
+void
 ledscape_wait(
 	ledscape_t * const leds
 )
 {
 	while (1)
 	{
-		pru_wait_interrupt(leds->pru0);
-		pru_wait_interrupt(leds->pru1);
-		
-		uint32_t response0 = leds->ws281x_0->response;
-		uint32_t response1 = leds->ws281x_1->response;
+		pru_wait_interrupt();
 
 		// printf("pru0: (%d,%d), pru1: (%d,%d)\n",
 		// 	leds->ws281x_0->command, leds->ws281x_0->response,
 		// 	leds->ws281x_1->command, leds->ws281x_1->response
 		// );
-		
-		if (!response0 || !response1)
-			continue;
-		
-		return response0;
+
+		if (leds->ws281x_0->response && leds->ws281x_1->response) return;
 	}
 }
 

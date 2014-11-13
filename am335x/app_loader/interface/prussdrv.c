@@ -3,35 +3,35 @@
  *
  * User space driver for PRUSS
  *
- * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/ 
- * 
- * 
- *  Redistribution and use in source and binary forms, with or without 
- *  modification, are permitted provided that the following conditions 
+ * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
+ *
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
  *  are met:
  *
- *    Redistributions of source code must retain the above copyright 
+ *    Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  *
  *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the 
- *    documentation and/or other materials provided with the   
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the
  *    distribution.
  *
  *    Neither the name of Texas Instruments Incorporated nor the names of
  *    its contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
 */
@@ -49,7 +49,13 @@
 
 #include <prussdrv.h>
 #include "__prussdrv.h"
-#include <pthread.h>
+#include <stdio.h>
+
+#ifdef __DEBUG
+#define DEBUG_PRINTF(FORMAT, ...) fprintf(stderr, FORMAT, ## __VA_ARGS__)
+#else
+#define DEBUG_PRINTF(FORMAT, ...)
+#endif
 
 #define PRUSS_UIO_PRAM_PATH_LEN 128
 #define PRUSS_UIO_PARAM_VAL_LEN 20
@@ -98,7 +104,7 @@ int __prussdrv_memmap_init(void)
     switch (prussdrv.version) {
     case PRUSS_V1:
         {
-            printf("AM18XX\n");
+            DEBUG_PRINTF(PRUSS_V1_STR "\n");
             prussdrv.pru0_dataram_phy_base = AM18XX_DATARAM0_PHYS_BASE;
             prussdrv.pru1_dataram_phy_base = AM18XX_DATARAM1_PHYS_BASE;
             prussdrv.intc_phy_base = AM18XX_INTC_PHYS_BASE;
@@ -112,7 +118,7 @@ int __prussdrv_memmap_init(void)
         break;
     case PRUSS_V2:
         {
-            printf("AM33XX\n");
+            DEBUG_PRINTF(PRUSS_V2_STR "\n");
             prussdrv.pru0_dataram_phy_base = AM33XX_DATARAM0_PHYS_BASE;
             prussdrv.pru1_dataram_phy_base = AM33XX_DATARAM1_PHYS_BASE;
             prussdrv.intc_phy_base = AM33XX_INTC_PHYS_BASE;
@@ -133,7 +139,7 @@ int __prussdrv_memmap_init(void)
         }
         break;
     default:
-        printf("UNKNOWN\n");
+        DEBUG_PRINTF(PRUSS_UNKNOWN_STR "\n");
     }
 
     prussdrv.pru1_dataram_base =
@@ -243,12 +249,12 @@ int prussdrv_init(void)
 
 }
 
-int prussdrv_open(unsigned int pru_evtout_num)
+int prussdrv_open(unsigned int host_interrupt)
 {
     char name[PRUSS_UIO_PRAM_PATH_LEN];
-    if (!prussdrv.fd[pru_evtout_num]) {
-        sprintf(name, "/dev/uio%d", pru_evtout_num);
-        prussdrv.fd[pru_evtout_num] = open(name, O_RDWR | O_SYNC);
+    if (!prussdrv.fd[host_interrupt]) {
+        sprintf(name, "/dev/uio%d", host_interrupt);
+        prussdrv.fd[host_interrupt] = open(name, O_RDWR | O_SYNC);
         return __prussdrv_memmap_init();
     } else {
         return -1;
@@ -256,8 +262,20 @@ int prussdrv_open(unsigned int pru_evtout_num)
     }
 }
 
+int prussdrv_version() {
+    return prussdrv.version;
+}
 
-
+const char * prussdrv_strversion(int version) {
+    switch (version) {
+        case PRUSS_V1:
+            return PRUSS_V1_STR;
+        case PRUSS_V2:
+            return PRUSS_V2_STR;
+        default:
+            return PRUSS_UNKNOWN_STR;
+    }
+}
 
 int prussdrv_pru_reset(unsigned int prunum)
 {
@@ -274,15 +292,22 @@ int prussdrv_pru_reset(unsigned int prunum)
 
 int prussdrv_pru_enable(unsigned int prunum)
 {
-    unsigned int *prucontrolregs;
+  return prussdrv_pru_enable_at(prunum, 0);
+}
+
+int prussdrv_pru_enable_at(unsigned int prunum, size_t addr)
+{
+    volatile uint32_t* prucontrolregs;
     if (prunum == 0)
-        prucontrolregs = (unsigned int *) prussdrv.pru0_control_base;
+        prucontrolregs = (volatile uint32_t *) prussdrv.pru0_control_base;
     else if (prunum == 1)
-        prucontrolregs = (unsigned int *) prussdrv.pru1_control_base;
+        prucontrolregs = (volatile uint32_t *) prussdrv.pru1_control_base;
     else
         return -1;
 
-    *prucontrolregs = 2;
+    /* address is in bytes and must be converted in 32 bits words */
+    *prucontrolregs = ((uint32_t)(addr / sizeof(uint32_t)) << 16) | 2;
+
     return 0;
 
 }
@@ -303,7 +328,7 @@ int prussdrv_pru_disable(unsigned int prunum)
 
 int prussdrv_pru_write_memory(unsigned int pru_ram_id,
                               unsigned int wordoffset,
-                              unsigned int *memarea,
+                              const unsigned int *memarea,
                               unsigned int bytelength)
 {
     unsigned int *pruramarea, i, wordlength;
@@ -339,9 +364,9 @@ int prussdrv_pru_write_memory(unsigned int pru_ram_id,
 }
 
 
-int prussdrv_pruintc_init(tpruss_intc_initdata * prussintc_init_data)
+int prussdrv_pruintc_init(const tpruss_intc_initdata *prussintc_init_data)
 {
-    unsigned int *pruintc_io = (unsigned int *) prussdrv.intc_base;
+    volatile unsigned int *pruintc_io = (volatile unsigned int *) prussdrv.intc_base;
     unsigned int i, mask1, mask2;
 
     pruintc_io[PRU_INTC_SIPR1_REG >> 2] = 0xFFFFFFFF;
@@ -387,8 +412,8 @@ int prussdrv_pruintc_init(tpruss_intc_initdata * prussintc_init_data)
                 mask2 +
                 (1 << (prussintc_init_data->sysevts_enabled[i] - 32));
         } else {
-            printf("Error: SYS_EVT%d out of range\n",
-                   prussintc_init_data->sysevts_enabled[i]);
+            DEBUG_PRINTF("Error: SYS_EVT%d out of range\n",
+			 prussintc_init_data->sysevts_enabled[i]);
             return -1;
         }
     }
@@ -404,13 +429,49 @@ int prussdrv_pruintc_init(tpruss_intc_initdata * prussintc_init_data)
 
     pruintc_io[PRU_INTC_GER_REG >> 2] = 0x1;
 
+    // Stash a copy of the intc settings
+    memcpy( &prussdrv.intc_data, prussintc_init_data,
+            sizeof(prussdrv.intc_data) );
+
     return 0;
 }
 
+short prussdrv_get_event_to_channel_map( unsigned int eventnum )
+{
+    unsigned int i;
+    for (i = 0; i < NUM_PRU_SYS_EVTS &&
+                prussdrv.intc_data.sysevt_to_channel_map[i].sysevt  !=-1 &&
+                prussdrv.intc_data.sysevt_to_channel_map[i].channel !=-1; ++i) {
+        if ( eventnum == prussdrv.intc_data.sysevt_to_channel_map[i].sysevt )
+            return prussdrv.intc_data.sysevt_to_channel_map[i].channel;
+    }
+    return -1;
+}
+
+short prussdrv_get_channel_to_host_map( unsigned int channel )
+{
+    unsigned int i;
+    for (i = 0; i < NUM_PRU_CHANNELS &&
+                prussdrv.intc_data.channel_to_host_map[i].channel != -1 &&
+                prussdrv.intc_data.channel_to_host_map[i].host    != -1; ++i) {
+        if ( channel == prussdrv.intc_data.channel_to_host_map[i].channel )
+            /** -2 is because first two host interrupts are reserved
+             * for PRU0 and PRU1 */
+            return prussdrv.intc_data.channel_to_host_map[i].host - 2;
+    }
+    return -1;
+}
+
+short prussdrv_get_event_to_host_map( unsigned int eventnum )
+{
+    short ans = prussdrv_get_event_to_channel_map( eventnum );
+    if (ans < 0) return ans;
+    return prussdrv_get_channel_to_host_map( ans );
+}
 
 int prussdrv_pru_send_event(unsigned int eventnum)
 {
-    unsigned int *pruintc_io = (unsigned int *) prussdrv.intc_base;
+    volatile unsigned int *pruintc_io = (volatile unsigned int *) prussdrv.intc_base;
     if (eventnum < 32)
         pruintc_io[PRU_INTC_SRSR1_REG >> 2] = 1 << eventnum;
     else
@@ -418,33 +479,45 @@ int prussdrv_pru_send_event(unsigned int eventnum)
     return 0;
 }
 
-int prussdrv_pru_wait_event(unsigned int pru_evtout_num)
+unsigned int prussdrv_pru_wait_event(unsigned int host_interrupt)
 {
-    int event_count;
-    unsigned int *pruintc_io = (unsigned int *) prussdrv.intc_base;
-    read(prussdrv.fd[pru_evtout_num], &event_count, sizeof(int));
-    pruintc_io[PRU_INTC_HIEISR_REG >> 2] = pru_evtout_num+2; 
-    return 0;
-
+    unsigned int event_count;
+    read(prussdrv.fd[host_interrupt], &event_count, sizeof(int));
+    return event_count;
 }
 
-int prussdrv_pru_clear_event(unsigned int eventnum)
+int prussdrv_pru_event_fd(unsigned int host_interrupt)
 {
-    unsigned int *pruintc_io = (unsigned int *) prussdrv.intc_base;
-    if (eventnum < 32)
-        pruintc_io[PRU_INTC_SECR1_REG >> 2] = 1 << eventnum;
+    if (host_interrupt < NUM_PRU_HOSTIRQS)
+        return prussdrv.fd[host_interrupt];
     else
-        pruintc_io[PRU_INTC_SECR2_REG >> 2] = 1 << (eventnum - 32);
+        return -1;
+}
+
+int prussdrv_pru_clear_event(unsigned int host_interrupt, unsigned int sysevent)
+{
+    volatile unsigned int *pruintc_io = (volatile unsigned int *) prussdrv.intc_base;
+    if (sysevent < 32)
+        pruintc_io[PRU_INTC_SECR1_REG >> 2] = 1 << sysevent;
+    else
+        pruintc_io[PRU_INTC_SECR2_REG >> 2] = 1 << (sysevent - 32);
+
+    // Re-enable the host interrupt.  Note that we must do this _after_ the
+    // system event has been cleared so as to not re-tigger the interrupt line.
+    // See Section 6.4.9 of Reference manual about HIEISR register.
+    // The +2 is because the first two host interrupts are reserved for
+    // PRU0 and PRU1.
+    pruintc_io[PRU_INTC_HIEISR_REG >> 2] = host_interrupt+2;
     return 0;
 }
 
 int prussdrv_pru_send_wait_clear_event(unsigned int send_eventnum,
-                                       unsigned int pru_evtout_num,
+                                       unsigned int host_interrupt,
                                        unsigned int ack_eventnum)
 {
     prussdrv_pru_send_event(send_eventnum);
-    prussdrv_pru_wait_event(pru_evtout_num);
-    prussdrv_pru_clear_event(ack_eventnum);
+    prussdrv_pru_wait_event(host_interrupt);
+    prussdrv_pru_clear_event(host_interrupt, ack_eventnum);
     return 0;
 
 }
@@ -466,6 +539,10 @@ int prussdrv_map_extmem(void **address)
 
 }
 
+unsigned int prussdrv_extmem_size(void)
+{
+    return prussdrv.extram_map_size;
+}
 
 int prussdrv_map_prumem(unsigned int pru_ram_id, void **address)
 {
@@ -519,7 +596,7 @@ int prussdrv_map_peripheral_io(unsigned int per_id, void **address)
     return 0;
 }
 
-unsigned int prussdrv_get_phys_addr(void *address)
+unsigned int prussdrv_get_phys_addr(const void *address)
 {
     unsigned int retaddr = 0;
     if ((address >= prussdrv.pru0_dataram_base)
@@ -581,17 +658,60 @@ int prussdrv_exit()
     for (i = 0; i < NUM_PRU_HOSTIRQS; i++) {
         if (prussdrv.fd[i])
             close(prussdrv.fd[i]);
-        if (prussdrv.irq_thread[i])
-            pthread_join(prussdrv.irq_thread[i], NULL);
     }
     return 0;
 }
 
-int prussdrv_exec_program(int prunum, char *filename)
+int prussdrv_exec_program(int prunum, const char *filename)
+{
+  return prussdrv_exec_program_at(prunum, filename, 0);
+}
+
+int prussdrv_exec_program_at(int prunum, const char *filename, size_t addr)
 {
     FILE *fPtr;
     unsigned char fileDataArray[PRUSS_MAX_IRAM_SIZE];
     int fileSize = 0;
+
+    // Open an File from the hard drive
+    fPtr = fopen(filename, "rb");
+    if (fPtr == NULL) {
+        DEBUG_PRINTF("File %s open failed\n", filename);
+	return -1;
+    } else {
+        DEBUG_PRINTF("File %s open passed\n", filename);
+    }
+    // Read file size
+    fseek(fPtr, 0, SEEK_END);
+    fileSize = ftell(fPtr);
+
+    if (fileSize == 0) {
+        DEBUG_PRINTF("File read failed.. Closing program\n");
+        fclose(fPtr);
+        return -1;
+    }
+
+    fseek(fPtr, 0, SEEK_SET);
+
+    if (fileSize !=
+        fread((unsigned char *) fileDataArray, 1, fileSize, fPtr)) {
+        DEBUG_PRINTF("WARNING: File Size mismatch\n");
+	fclose(fPtr);
+	return -1;
+    }
+
+    fclose(fPtr);
+
+    return prussdrv_exec_code_at(prunum, (const unsigned int *) fileDataArray, fileSize, addr);
+}
+
+int prussdrv_exec_code(int prunum, const unsigned int *code, int codelen)
+{
+  return prussdrv_exec_code_at(prunum, code, codelen, 0);
+}
+
+int prussdrv_exec_code_at(int prunum, const unsigned int *code, int codelen, size_t addr)
+{
     unsigned int pru_ram_id;
 
     if (prunum == 0)
@@ -601,19 +721,34 @@ int prussdrv_exec_program(int prunum, char *filename)
     else
         return -1;
 
+    // Make sure PRU sub system is first disabled/reset
+    prussdrv_pru_disable(prunum);
+    prussdrv_pru_write_memory(pru_ram_id, 0, code, codelen);
+    prussdrv_pru_enable_at(prunum, addr);
+
+    return 0;
+}
+
+int prussdrv_load_datafile(int prunum, const char *filename)
+{
+    FILE *fPtr;
+    unsigned char fileDataArray[PRUSS_MAX_IRAM_SIZE];
+    int fileSize = 0;
+
     // Open an File from the hard drive
     fPtr = fopen(filename, "rb");
     if (fPtr == NULL) {
-        printf("File %s open failed\n", filename);
+        DEBUG_PRINTF("File %s open failed\n", filename);
+	return -1;
     } else {
-        printf("File %s open passed\n", filename);
+        DEBUG_PRINTF("File %s open passed\n", filename);
     }
     // Read file size
     fseek(fPtr, 0, SEEK_END);
     fileSize = ftell(fPtr);
 
     if (fileSize == 0) {
-        printf("File read failed.. Closing program\n");
+        DEBUG_PRINTF("File read failed.. Closing program\n");
         fclose(fPtr);
         return -1;
     }
@@ -622,39 +757,31 @@ int prussdrv_exec_program(int prunum, char *filename)
 
     if (fileSize !=
         fread((unsigned char *) fileDataArray, 1, fileSize, fPtr)) {
-        printf("WARNING: File Size mismatch\n");
+        DEBUG_PRINTF("WARNING: File Size mismatch\n");
+	fclose(fPtr);
+	return -1;
     }
 
     fclose(fPtr);
 
-    // Make sure PRU sub system is first disabled/reset  
-    prussdrv_pru_disable(prunum);
-    prussdrv_pru_write_memory(pru_ram_id, 0,
-                              (unsigned int *) fileDataArray, fileSize);
-    prussdrv_pru_enable(prunum);
-
-    return 0;
+    return prussdrv_load_data(prunum, (const unsigned int *) fileDataArray, fileSize);
 }
 
-int prussdrv_start_irqthread(unsigned int pru_evtout_num, int priority,
-                             prussdrv_function_handler irqhandler)
+int prussdrv_load_data(int prunum, const unsigned int *code, int codelen)
 {
-    pthread_attr_t pthread_attr;
-    struct sched_param sched_param;
-    pthread_attr_init(&pthread_attr);
-    if (priority != 0) {
-        pthread_attr_setinheritsched(&pthread_attr,
-                                     PTHREAD_EXPLICIT_SCHED);
-        pthread_attr_setschedpolicy(&pthread_attr, SCHED_FIFO);
-        sched_param.sched_priority = priority;
-        pthread_attr_setschedparam(&pthread_attr, &sched_param);
-    }
+    unsigned int pru_ram_id;
 
-    pthread_create(&prussdrv.irq_thread[pru_evtout_num], &pthread_attr,
-                   irqhandler, NULL);
+    if (prunum == 0)
+        pru_ram_id = PRUSS0_PRU0_DATARAM;
+    else if (prunum == 1)
+        pru_ram_id = PRUSS0_PRU1_DATARAM;
+    else
+        return -1;
 
-    pthread_attr_destroy(&pthread_attr);
+    // Make sure PRU sub system is first disabled/reset
+    prussdrv_pru_disable(prunum);
+    prussdrv_pru_write_memory(pru_ram_id, 0, code, codelen);
+    //prussdrv_pru_enable(prunum);
 
     return 0;
-
 }

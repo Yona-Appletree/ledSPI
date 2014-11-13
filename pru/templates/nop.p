@@ -64,6 +64,10 @@ START:
 	// handles the exit case if an invalid value is written to the start
 	// start position.
 _LOOP:
+	// Let ledscape know that we're starting the loop again. It waits for this
+	// interrupt before sending another frame
+	RAISE_ARM_INTERRUPT
+
 	// Load the pointer to the buffer from PRU DRAM into r0 and the
 	// length (in bytes-bit words) into r1.
 	// start command into r2
@@ -101,12 +105,5 @@ EXIT:
 	// Write a 0xFF into the response field so that they know we're done
 	MOV r2, #0xFF
 	SBCO r2, CONST_PRUDRAM, 12, 4
-
-#ifdef AM33XX
-	// Send notification to Host for program completion
-	MOV R31.b0, PRU_ARM_INTERRUPT+16
-#else
-	MOV R31.b0, PRU_ARM_INTERRUPT
-#endif
 
 	HALT

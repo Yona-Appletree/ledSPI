@@ -65,6 +65,10 @@ START:
 	// handles the exit case if an invalid value is written to the start
 	// start position.
 _LOOP:
+	// Let ledscape know that we're starting the loop again. It waits for this
+	// interrupt before sending another frame
+	RAISE_ARM_INTERRUPT
+
 	// Load the pointer to the buffer from PRU DRAM into r0 and the
 	// length (in bytes-bit words) into r1.
 	// start command into r2

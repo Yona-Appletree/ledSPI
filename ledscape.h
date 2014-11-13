@@ -107,7 +107,7 @@ extern inline void ledscape_pixel_set_color(
 	uint8_t b
 );
 
-extern uint32_t
+extern void
 ledscape_wait(
 	ledscape_t * const leds
 );
