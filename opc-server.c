@@ -1643,7 +1643,7 @@ void* demo_thread(void* unused_data)
 	uint8_t demo_enabled = FALSE;
 
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
-	for (uint16_t i = 0; /*ever*/; i+=400) {
+	for (uint16_t frame_index = 0; /*ever*/; frame_index +=3) {
 		// Calculate time since last remote data
 		pthread_mutex_lock(&g_runtime_state.mutex);
 		gettimeofday(&now_tv, NULL);
@@ -1699,10 +1699,12 @@ void* demo_thread(void* unused_data)
 						} break;
 
 						case DEMO_MODE_FADE: {
+							int baseBrightness = 196;
+							int brightnessChange = 128;
 							HSBtoRGB(
-								((i + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
-								200,
-								128 - (((i/10) + (p*96)/leds_per_strip + strip*10) % 96),
+								((frame_index + ((p + strip*leds_per_strip)*360)/(leds_per_strip*10)) % 360),
+								255,
+								baseBrightness - (((frame_index /10) + (p*brightnessChange)/leds_per_strip + strip*10) % brightnessChange),
 								&buffer[data_index]
 							);
 						} break;
@@ -1717,7 +1719,7 @@ void* demo_thread(void* unused_data)
 			set_next_frame_data(buffer, buffer_size, FALSE);
 		}
 
-		usleep(1e6);
+		usleep(1e6/30);
 	}
 #pragma clang diagnostic pop
 
