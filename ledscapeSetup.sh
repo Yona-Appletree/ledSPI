@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 #Copy DTBS File
 echo "Installing DTBS..."
@@ -11,11 +11,11 @@ modprobe uio_pruss
 
 #Replace uEnv.txt file that has HDMI disabled
 echo "Disabling HDMI..."
-cp --backup /root/LEDscape/uEnv.txt /boot/uboot/uEnv.txt
+cp --backup uEnv.txt /boot/uboot/uEnv.txt
 
 #Set Static IP on BBB
 echo "Setting Static IP..."
-cp --backup /root/LEDscape/interfaces /etc/network/interfaces
+cp --backup interfaces /etc/network/interfaces
 
 #Inform User of Final Steps
 echo "Reboot BBB for settings to take effect..."
