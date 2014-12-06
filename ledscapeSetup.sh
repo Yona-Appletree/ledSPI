@@ -11,11 +11,11 @@ modprobe uio_pruss
 
 #Replace uEnv.txt file that has HDMI disabled
 echo "Disabling HDMI..."
-cp --backup uEnv.txt /boot/uboot/uEnv.txt
+cp uEnv.txt /boot/uboot/uEnv.txt
 
 #Set Static IP on BBB
 echo "Setting Static IP..."
-cp --backup interfaces /etc/network/interfaces
+cp interfaces /etc/network/interfaces
 
 #Inform User of Final Steps
 echo "Reboot BBB for settings to take effect..."
