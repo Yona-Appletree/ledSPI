@@ -212,6 +212,14 @@ lab:
 	QBGT lab, r_temp1, r_temp2
 .endm
 
+/** Used after WAITNS to jump to a label if too much time has elapsed */
+.macro WAIT_TIMEOUT
+.mparam timeoutNs, timeoutLabel
+    // Check that we haven't waited too long (waiting for memory, etc...) and if we have, jump to a timeout label
+    MOV r_temp2, ((timeoutNs)/5 - 20)
+    QBGT timeoutLabel, r_temp2, r_temp1
+.endm
+
 /** Reset the cycle counter */
 .macro RESET_COUNTER
 		// Disable the counter and clear it, then re-enable it

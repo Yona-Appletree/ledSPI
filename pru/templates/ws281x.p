@@ -30,6 +30,8 @@
 
 #include "common.p.h"
 
+#define CHECK_TIMEOUT WAIT_TIMEOUT 3000, FRAME_DONE
+
 START:
 	// Enable OCP master port
 	// clear the STANDBY_INIT bit in the SYSCFG register,
@@ -132,12 +134,14 @@ l_word_loop:
 		PREP_GPIO_ADDRS_FOR_CLEAR()
 
 		WAITNS 900, wait_one_time
+		CHECK_TIMEOUT
 		GPIO_APPLY_MASK_TO_ADDR()
 
 		PREP_GPIO_ADDRS_FOR_SET()
 
 		// Wait until the end of the frame (including the time it takes to reset the counter)
 		WAITNS 1150, wait_frame_spacing_time
+		CHECK_TIMEOUT
 		RESET_COUNTER
 
 		// Send all the start bits
@@ -157,6 +161,7 @@ l_word_loop:
 		TEST_BIT_ZERO(r_data7, 23)
 
 		WAITNS 240, wait_zero_time
+		CHECK_TIMEOUT
 
 		// Lower the zero bit lines
 		GPIO_APPLY_ZEROS_TO_ADDR()
@@ -170,6 +175,7 @@ l_word_loop:
 	DECREMENT r_data_len
 	QBNE l_word_loop, r_data_len, #0
 
+FRAME_DONE:
 	// Final clear for the word
 	PREP_GPIO_MASK_NAMED(all)
 	PREP_GPIO_ADDRS_FOR_CLEAR()
@@ -179,7 +185,7 @@ l_word_loop:
 
 	// Delay at least 50 usec; this is the required reset
 	// time for the LED strip to update with the new pixels.
-	SLEEPNS 50000, 1, reset_time
+	SLEEPNS 5000000 /*50000*/, 1, reset_time
 
 	// Write out that we are done!
 	// Store a non-zero response in the buffer so that they know that we are done
