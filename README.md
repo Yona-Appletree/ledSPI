@@ -71,8 +71,7 @@ Note: Locating the am335x-boneblack.dtb file:
 Disabling HDMI
 --------------
 
-If you need to use all 48 pins made available by LEDscape, you'll have
-to disable the HDMI "cape" on the BeagleBone Black.
+For LEDscape to run properly you'll have to disable the HDMI "cape" on the BeagleBone Black.
 
 Mount the FAT32 partition, either through linux on the BeagleBone or
 by plugging the USB into a computer, modify 'uEnv.txt' by changing:
