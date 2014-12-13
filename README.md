@@ -57,6 +57,7 @@ Disable HDMI (see below)
 	reboot
 
 After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
+
 	cd LEDscape
 	make
 	
