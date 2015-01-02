@@ -7,4 +7,4 @@ cd "$DIRNAME"
 # (sleep 30; /usr/bin/sshd -f /etc/ssh/sshd_config) &
 
 modprobe uio_pruss
-./opc-server -p 7890 -c 64
+./opc-server -P 7890 -s 48 -c 64
