@@ -7,4 +7,5 @@ cd "$DIRNAME"
 # (sleep 30; /usr/bin/sshd -f /etc/ssh/sshd_config) &
 
 modprobe uio_pruss
-./opc-server -P 7890 -s 48 -c 64
+#./opc-server -P 7890 -s 48 -c 64
+./opc-server --config ws281x-config.json
