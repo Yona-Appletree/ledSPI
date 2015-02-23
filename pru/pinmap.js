@@ -1,97 +1,98 @@
 var pinData = [
-		{ header: 8, headerPin:  1,   gpioNum: 0   },    
-		{ header: 8, headerPin:  2, gpioNum: 0   },    
-		{ header: 8, headerPin:  3, gpioNum: 38  },    
-		{ header: 8, headerPin:  4, gpioNum: 39  },    
-		{ header: 8, headerPin:  5, gpioNum: 34  },    
-		{ header: 8, headerPin:  6, gpioNum: 35  },    
-		{ header: 8, headerPin:  7, gpioNum: 66  },    
-		{ header: 8, headerPin:  8, gpioNum: 67  },    
-		{ header: 8, headerPin:  9, gpioNum: 69  },    
-		{ header: 8, headerPin: 10, gpioNum: 68  },    
-		{ header: 8, headerPin: 11, gpioNum: 45  },    
-		{ header: 8, headerPin: 12, gpioNum: 44  },    
-		{ header: 8, headerPin: 13, gpioNum: 23  },    
-		{ header: 8, headerPin: 14, gpioNum: 26  },    
-		{ header: 8, headerPin: 15, gpioNum: 47  },    
-		{ header: 8, headerPin: 16, gpioNum: 46  },    
-		{ header: 8, headerPin: 17, gpioNum: 27  },    
-		{ header: 8, headerPin: 18, gpioNum: 65  },    
-		{ header: 8, headerPin: 19, gpioNum: 22  },    
-		{ header: 8, headerPin: 20, gpioNum: 63  },    
-		{ header: 8, headerPin: 21, gpioNum: 62  },    
-		{ header: 8, headerPin: 22, gpioNum: 37  },    
-		{ header: 8, headerPin: 23, gpioNum: 36  },    
-		{ header: 8, headerPin: 24, gpioNum: 33  },    
-		{ header: 8, headerPin: 25, gpioNum: 1   },    
-		{ header: 8, headerPin: 26, gpioNum: 61  },    
-		{ header: 8, headerPin: 27, gpioNum: 86  },    
-		{ header: 8, headerPin: 28, gpioNum: 88  },    
-		{ header: 8, headerPin: 29, gpioNum: 87  },    
-		{ header: 8, headerPin: 30, gpioNum: 89  },    
-		{ header: 8, headerPin: 31, gpioNum: 10  },    
-		{ header: 8, headerPin: 32, gpioNum: 11  },    
-		{ header: 8, headerPin: 33, gpioNum: 9   },    
-		{ header: 8, headerPin: 34, gpioNum: 81  },    
-		{ header: 8, headerPin: 35, gpioNum: 8   },    
-		{ header: 8, headerPin: 36, gpioNum: 80  },    
-		{ header: 8, headerPin: 37, gpioNum: 78  },    
-		{ header: 8, headerPin: 38, gpioNum: 79  },    
-		{ header: 8, headerPin: 39, gpioNum: 76  },    
-		{ header: 8, headerPin: 40, gpioNum: 77  },    
-		{ header: 8, headerPin: 41, gpioNum: 74  },    
-		{ header: 8, headerPin: 42, gpioNum: 75  },    
-		{ header: 8, headerPin: 43, gpioNum: 72  },    
-		{ header: 8, headerPin: 44, gpioNum: 73  },    
-		{ header: 8, headerPin: 45, gpioNum: 70  },    
-		{ header: 8, headerPin: 46, gpioNum: 71  },    
-		{ header: 9, headerPin:  1, gpioNum: 0   },    
-		{ header: 9, headerPin:  2, gpioNum: 0   },    
-		{ header: 9, headerPin:  3, gpioNum: 0   },    
-		{ header: 9, headerPin:  4, gpioNum: 0   },    
-		{ header: 9, headerPin:  5, gpioNum: 0   },    
-		{ header: 9, headerPin:  6, gpioNum: 0   },    
-		{ header: 9, headerPin:  7, gpioNum: 0   },    
-		{ header: 9, headerPin:  8, gpioNum: 0   },    
-		{ header: 9, headerPin:  9, gpioNum: 0   },    
-		{ header: 9, headerPin: 10, gpioNum: 0   },    
-		{ header: 9, headerPin: 11, gpioNum: 30  },    
-		{ header: 9, headerPin: 12, gpioNum: 60  },    
-		{ header: 9, headerPin: 13, gpioNum: 31  },    
-		{ header: 9, headerPin: 14, gpioNum: 50  },    
-		{ header: 9, headerPin: 15, gpioNum: 48  },    
-		{ header: 9, headerPin: 16, gpioNum: 51  },    
-		{ header: 9, headerPin: 17, gpioNum: 5   },    
-		{ header: 9, headerPin: 18, gpioNum: 4   },    
-		{ header: 9, headerPin: 19, gpioNum: 13  },    
-		{ header: 9, headerPin: 20, gpioNum: 12  },    
-		{ header: 9, headerPin: 21, gpioNum: 3   },    
-		{ header: 9, headerPin: 22, gpioNum: 2   },    
-		{ header: 9, headerPin: 23, gpioNum: 49  },    
-		{ header: 9, headerPin: 24, gpioNum: 15  },    
-		{ header: 9, headerPin: 25, gpioNum: 117 },    
-		{ header: 9, headerPin: 26, gpioNum: 14  },    
-		{ header: 9, headerPin: 27, gpioNum: 115 },    
-		{ header: 9, headerPin: 28, gpioNum: 113 },    
-		{ header: 9, headerPin: 29, gpioNum: 111 },    
-		{ header: 9, headerPin: 30, gpioNum: 112 },    
-		{ header: 9, headerPin: 31, gpioNum: 110 },    
-		{ header: 9, headerPin: 32, gpioNum: 0   },    
-		{ header: 9, headerPin: 33, gpioNum: 0   },    
-		{ header: 9, headerPin: 34, gpioNum: 0   },    
-		{ header: 9, headerPin: 35, gpioNum: 0   },    
-		{ header: 9, headerPin: 36, gpioNum: 0   },    
-		{ header: 9, headerPin: 37, gpioNum: 0   },    
-		{ header: 9, headerPin: 38, gpioNum: 0   },    
-		{ header: 9, headerPin: 39, gpioNum: 0   },    
-		{ header: 9, headerPin: 40, gpioNum: 0   },    
-		{ header: 9, headerPin: 41, gpioNum: 20  },    
-		{ header: 9, headerPin: 42, gpioNum: 7   },    
-		{ header: 9, headerPin: 43, gpioNum: 0   },    
-		{ header: 9, headerPin: 44, gpioNum: 0   },    
-		{ header: 9, headerPin: 45, gpioNum: 0   },    
-		{ header: 9, headerPin: 46, gpioNum: 0   }
+	{ header: 8, headerPin:  1, gpioNum: 0  , name: "GND"        },
+	{ header: 8, headerPin:  2, gpioNum: 0  , name: "GND"        },
+	{ header: 8, headerPin:  3, gpioNum: 38 , name: "GPIO1_6"    },
+	{ header: 8, headerPin:  4, gpioNum: 39 , name: "GPIO1_7"    },
+	{ header: 8, headerPin:  5, gpioNum: 34 , name: "GPIO1_2"    },
+	{ header: 8, headerPin:  6, gpioNum: 35 , name: "GPIO1_3"    },
+	{ header: 8, headerPin:  7, gpioNum: 66 , name: "TIMER4"     },
+	{ header: 8, headerPin:  8, gpioNum: 67 , name: "TIMER7"     },
+	{ header: 8, headerPin:  9, gpioNum: 69 , name: "TIMER5"     },
+	{ header: 8, headerPin: 10, gpioNum: 68 , name: "TIMER6"     },
+	{ header: 8, headerPin: 11, gpioNum: 45 , name: "GPIO1_13"   },
+	{ header: 8, headerPin: 12, gpioNum: 44 , name: "GPIO1_12"   },
+	{ header: 8, headerPin: 13, gpioNum: 23 , name: "EHRPWM2B"   },
+	{ header: 8, headerPin: 14, gpioNum: 26 , name: "GPIO0_26"   },
+	{ header: 8, headerPin: 15, gpioNum: 47 , name: "GPIO1_15"   },
+	{ header: 8, headerPin: 16, gpioNum: 46 , name: "GPIO1_14"   },
+	{ header: 8, headerPin: 17, gpioNum: 27 , name: "GPIO0_27"   },
+	{ header: 8, headerPin: 18, gpioNum: 65 , name: "GPIO2_1"    },
+	{ header: 8, headerPin: 19, gpioNum: 22 , name: "EHRPWM2A"   },
+	{ header: 8, headerPin: 20, gpioNum: 63 , name: "GPIO1_31"   },
+	{ header: 8, headerPin: 21, gpioNum: 62 , name: "GPIO1_30"   },
+	{ header: 8, headerPin: 22, gpioNum: 37 , name: "GPIO1_5"    },
+	{ header: 8, headerPin: 23, gpioNum: 36 , name: "GPIO1_4"    },
+	{ header: 8, headerPin: 24, gpioNum: 33 , name: "GPIO1_1"    },
+	{ header: 8, headerPin: 25, gpioNum: 1  , name: "GPIO1_0"    },
+	{ header: 8, headerPin: 26, gpioNum: 61 , name: "GPIO1_29"   },
+	{ header: 8, headerPin: 27, gpioNum: 86 , name: "GPIO2_22"   },
+	{ header: 8, headerPin: 28, gpioNum: 88 , name: "GPIO2_24"   },
+	{ header: 8, headerPin: 29, gpioNum: 87 , name: "GPIO2_23"   },
+	{ header: 8, headerPin: 30, gpioNum: 89 , name: "GPIO2_25"   },
+	{ header: 8, headerPin: 31, gpioNum: 10 , name: "UART5_CTSN" },
+	{ header: 8, headerPin: 32, gpioNum: 11 , name: "UART5_RTSN" },
+	{ header: 8, headerPin: 33, gpioNum: 9  , name: "UART4_RTSN" },
+	{ header: 8, headerPin: 34, gpioNum: 81 , name: "UART3_RTSN" },
+	{ header: 8, headerPin: 35, gpioNum: 8  , name: "UART4_CTSN" },
+	{ header: 8, headerPin: 36, gpioNum: 80 , name: "UART3_CTSN" },
+	{ header: 8, headerPin: 37, gpioNum: 78 , name: "UART5_TXD"  },
+	{ header: 8, headerPin: 38, gpioNum: 79 , name: "UART5_RXD"  },
+	{ header: 8, headerPin: 39, gpioNum: 76 , name: "GPIO2_12"   },
+	{ header: 8, headerPin: 40, gpioNum: 77 , name: "GPIO2_13"   },
+	{ header: 8, headerPin: 41, gpioNum: 74 , name: "GPIO2_10"   },
+	{ header: 8, headerPin: 42, gpioNum: 75 , name: "GPIO2_11"   },
+	{ header: 8, headerPin: 43, gpioNum: 72 , name: "GPIO2_8"    },
+	{ header: 8, headerPin: 44, gpioNum: 73 , name: "GPIO2_9"    },
+	{ header: 8, headerPin: 45, gpioNum: 70 , name: "GPIO2_6"    },
+	{ header: 8, headerPin: 46, gpioNum: 71 , name: "GPIO2_7"    },
+	{ header: 9, headerPin:  1, gpioNum: 0  , name: "GND"        },
+	{ header: 9, headerPin:  2, gpioNum: 0  , name: "GND"        },
+	{ header: 9, headerPin:  3, gpioNum: 0  , name: "VDD_3V3EXP" },
+	{ header: 9, headerPin:  4, gpioNum: 0  , name: "VDD_3V3EXP" },
+	{ header: 9, headerPin:  5, gpioNum: 0  , name: "VDD_5V"     },
+	{ header: 9, headerPin:  6, gpioNum: 0  , name: "VDD_5V"     },
+	{ header: 9, headerPin:  7, gpioNum: 0  , name: "SYS_5V"     },
+	{ header: 9, headerPin:  8, gpioNum: 0  , name: "SYS_5V"     },
+	{ header: 9, headerPin:  9, gpioNum: 0  , name: "PWR_BUT"    },
+	{ header: 9, headerPin: 10, gpioNum: 0  , name: "SYS_RESETn" },
+	{ header: 9, headerPin: 11, gpioNum: 30 , name: "UART4_RXD"  },
+	{ header: 9, headerPin: 12, gpioNum: 60 , name: "GPIO1_28"   },
+	{ header: 9, headerPin: 13, gpioNum: 31 , name: "UART4_TXD"  },
+	{ header: 9, headerPin: 14, gpioNum: 50 , name: "EHRPWM1A"   },
+	{ header: 9, headerPin: 15, gpioNum: 48 , name: "GPIO1_16"   },
+	{ header: 9, headerPin: 16, gpioNum: 51 , name: "EHRPWM1B"   },
+	{ header: 9, headerPin: 17, gpioNum: 5  , name: "I2C1_SCL"   },
+	{ header: 9, headerPin: 18, gpioNum: 4  , name: "I2C1_SDA"   },
+	{ header: 9, headerPin: 19, gpioNum: 13 , name: "I2C2_SCL"   },
+	{ header: 9, headerPin: 20, gpioNum: 12 , name: "I2C2_SDA"   },
+	{ header: 9, headerPin: 21, gpioNum: 3  , name: "UART2_TXD"  },
+	{ header: 9, headerPin: 22, gpioNum: 2  , name: "UART2_RXD"  },
+	{ header: 9, headerPin: 23, gpioNum: 49 , name: "GPIO1_17"   },
+	{ header: 9, headerPin: 24, gpioNum: 15 , name: "UART1_TXD"  },
+	{ header: 9, headerPin: 25, gpioNum: 117, name: "GPIO3_21"   },
+	{ header: 9, headerPin: 26, gpioNum: 14 , name: "UART1_RXD"  },
+	{ header: 9, headerPin: 27, gpioNum: 115, name: "GPIO3_19"   },
+	{ header: 9, headerPin: 28, gpioNum: 113, name: "SPI1_CS0"   },
+	{ header: 9, headerPin: 29, gpioNum: 111, name: "SPI1_MISO"  }, // Was SPI1_D0 (Input)
+	{ header: 9, headerPin: 30, gpioNum: 112, name: "SPI1_MOSI"  }, // Was SPI1_D1 (Output)
+	{ header: 9, headerPin: 31, gpioNum: 110, name: "SPI1_CLK"   },
+	{ header: 9, headerPin: 32, gpioNum: 0  , name: "VDD_ADC"    },
+	{ header: 9, headerPin: 33, gpioNum: 0  , name: "AIN4"       },
+	{ header: 9, headerPin: 34, gpioNum: 0  , name: "GNDA_ADC"   },
+	{ header: 9, headerPin: 35, gpioNum: 0  , name: "AIN6"       },
+	{ header: 9, headerPin: 36, gpioNum: 0  , name: "AIN5"       },
+	{ header: 9, headerPin: 37, gpioNum: 0  , name: "AIN2"       },
+	{ header: 9, headerPin: 38, gpioNum: 0  , name: "AIN3"       },
+	{ header: 9, headerPin: 39, gpioNum: 0  , name: "AIN0"       },
+	{ header: 9, headerPin: 40, gpioNum: 0  , name: "AIN1"       },
+	{ header: 9, headerPin: 41, gpioNum: 20 , name: "CLKOUT2"    },
+	{ header: 9, headerPin: 42, gpioNum: 7  , name: "GPIO1_7"    },
+	{ header: 9, headerPin: 43, gpioNum: 0  , name: "GND"        },
+	{ header: 9, headerPin: 44, gpioNum: 0  , name: "GND"        },
+	{ header: 9, headerPin: 45, gpioNum: 0  , name: "GND"        },
+	{ header: 9, headerPin: 46, gpioNum: 0  , name: "GND"        }
 ];
+
 
 var pinsByHeaderAndPin = {9:[], 8: []};
 var pinsByGpioNum = {9:[], 8: []};
@@ -106,7 +107,7 @@ pinData.forEach(function(d){
 	pinsByHeaderAndPin[d.header][d.headerPin] = d;
 	pinsByGpioNum[d.gpioNum] = d;
 	pinsByGpioBankAndBit[d.gpioBank] = pinsByGpioBankAndBit[d.gpioBank] || [];
-	pinsByGpioBankAndBit[d.gpioBank][d.gpioBit] = d; 
+	pinsByGpioBankAndBit[d.gpioBank][d.gpioBit] = d;
 });
 
 var bitsUsedByBank = [
@@ -190,21 +191,21 @@ p9verified.forEach(function(verified, i){pinsByHeaderAndPin[9][i+1].verified = !
 
 var Color = {
 	black: 30
-  , blue: 34
-  , cyan: 36
-  , green: 32
-  , magenta: 35
-  , red: 31
-  , yellow: 33
-  , grey: 90
-  , brightBlack: 90
-  , brightRed: 91
-  , brightGreen: 92
-  , brightYellow: 93
-  , brightBlue: 94
-  , brightMagenta: 95
-  , brightCyan: 96
-  , brightWhite: 97
+	, blue: 34
+	, cyan: 36
+	, green: 32
+	, magenta: 35
+	, red: 31
+	, yellow: 33
+	, grey: 90
+	, brightBlack: 90
+	, brightRed: 91
+	, brightGreen: 92
+	, brightYellow: 93
+	, brightBlue: 94
+	, brightMagenta: 95
+	, brightCyan: 96
+	, brightWhite: 97
 }
 
 var defaultCellSize = 5;
@@ -230,16 +231,16 @@ function endRow() {
 
 function printPinTable(title, f) {
 	var headerColumnsWidth = defaultCellSize*3 + 8*2;
-	cell(title, Color.brightBlue, headerColumnsWidth*2 + defaultCellSize); 
+	cell(title, Color.brightBlue, headerColumnsWidth*2 + defaultCellSize);
 	endRow();
 
 	cell("Row", Color.brightMagenta);
 	cell("Pin#", Color.brightMagenta);
-	cell("P9", Color.blue, 16);
+	cell("P9", Color.blue, 24);
 	cell("Pin#", Color.brightMagenta);
 	cell("|", null, 4);
 	cell("Pin#", Color.brightMagenta);
-	cell("P8", Color.blue, 16);
+	cell("P8", Color.blue, 24);
 	cell("Pin#", Color.brightMagenta);
 	cell("Row", Color.brightMagenta);
 	endRow();
@@ -247,13 +248,13 @@ function printPinTable(title, f) {
 	for (var row=0; row<23; row++) {
 		cell(row+1, Color.cyan);
 		cell(row*2+1, Color.yellow);
-		cell(f(pinsByHeaderAndPin[9][row*2+1]), Color.brightGreen, 8);
-		cell(f(pinsByHeaderAndPin[9][row*2+2]), Color.brightGreen, 8);
+		cell(f(pinsByHeaderAndPin[9][row*2+1]), Color.brightGreen, 12);
+		cell(f(pinsByHeaderAndPin[9][row*2+2]), Color.brightGreen, 12);
 		cell(row*2+2, Color.yellow);
 		cell("|", null, 4);
 		cell(row*2+1, Color.yellow);
-		cell(f(pinsByHeaderAndPin[8][row*2+1]), Color.brightGreen, 8);
-		cell(f(pinsByHeaderAndPin[8][row*2+2]), Color.brightGreen, 8);
+		cell(f(pinsByHeaderAndPin[8][row*2+1]), Color.brightGreen, 12);
+		cell(f(pinsByHeaderAndPin[8][row*2+2]), Color.brightGreen, 12);
 		cell(row*2+2, Color.yellow);
 		cell(row+1, Color.cyan);
 		endRow();
@@ -269,6 +270,9 @@ var Commands = {
 		printPinTable("GPIO: Global Number", function(p){ return p.gpioNum || "" });
 		printPinTable("Original Channel Index", function(p){ return p.channelIndex!=undefined ? p.channelIndex : "" });
 		printPinTable("Mapped Channel Index", function(p){ return p.mappedChannelIndex!=undefined ? p.mappedChannelIndex : "" });
+
+		printPinTable("Unused Channels", function(p){ return (p.channelIndex==undefined & p.gpioNum) ? p.gpioName : "" });
+		printPinTable("NAME", function(p){ return p.name });
 
 //printPinTable("Non-verified used pins", function(p){ return (!p.verified && p.used) ? p.gpioName : "" });
 		console.info("Total Used Pins: " + totalVerifiedCount);
