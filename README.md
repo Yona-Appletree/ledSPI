@@ -148,10 +148,10 @@ can be obtained by running `opc-server -h`.
 
 Frame Rates for WS2812 Leds
 -----------
-512 per channel ~= 060 fps
-256 per channel ~= 120 fps
-128 per channel ~= 240 fps
-064 per channel ~= 400 fps
+	512 per channel ~= 060 fps
+	256 per channel ~= 120 fps
+	128 per channel ~= 240 fps
+	064 per channel ~= 400 fps
 
 Pin Mappings
 ------------
