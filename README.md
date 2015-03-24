@@ -44,13 +44,21 @@ Angstrom - RevB
 	modprobe uio_pruss
 	reboot
 
-Debian - RevC
+Debian - RevC (2014-04-23)
 
 	git clone git://github.com/Yona-Appletree/LEDscape
 	cd LEDscape
 	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/uboot/dtbs/
 	modprobe uio_pruss
+	
+Debian - RevC (2015-03-01)
+
+	git clone git://github.com/Yona-Appletree/LEDscape
+	cd LEDscape
+	cp ./boot/dtbs/3.8.13-bone70/am335x-boneblack.dtb{,.preledscape_bk}
+	cp am335x-boneblack.dtb ./boot/dtbs/3.8.13-bone70/
+	modprobe uio_pruss	
 
 Disable HDMI (see below)
 
