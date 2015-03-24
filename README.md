@@ -44,6 +44,7 @@ Angstrom - RevB
 	modprobe uio_pruss
 	vi /boot/uboot/uEnv.txt
 	reboot
+	sudo ./install-service.sh
 
 Debian - RevC (2014-04-23)
 
@@ -54,6 +55,7 @@ Debian - RevC (2014-04-23)
 	modprobe uio_pruss
 	vi /boot/uboot/uEnv.txt 
 	reboot
+	sudo ./install-service.sh
 	
 Debian - RevC (2015-03-01)
 
@@ -64,6 +66,7 @@ Debian - RevC (2015-03-01)
 	modprobe uio_pruss	
 	vi /boot/uEnv.txt
 	reboot
+	sudo ./install-service.sh
 
 After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
 
