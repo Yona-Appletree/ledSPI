@@ -6,7 +6,7 @@
 //
 // To stop, the ARM can write a 0xFF to the command, which will cause the PRU code to exit.
 //
-// At 4mhz the APA102 signal is SPI standard, with a frame header and footer.
+// Implementation does not try and stick to any specific clock speed, just pushes out data as fast as it can (about 1.6mhz).
 // 
 // [ start frame ][   LED1   ][   LED2   ]...[   LEDN   ][ end frame ]
 // [ 32bit x 0   ][0xFF 8 8 8][0xFF 8 8 8]...[0xFF 8 8 8][ (n/2) * 1 ]
