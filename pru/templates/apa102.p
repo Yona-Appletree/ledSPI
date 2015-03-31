@@ -201,6 +201,7 @@ l_end_frame:
 	// send end frame bits
 	MOV r_bit_num, r29
 	LSR r_bit_num, r_bit_num, 1
+	ADD r_bit_num, r_bit_num, 1
 
 	RESET_GPIO_ONES()
 
