@@ -102,7 +102,7 @@ l_start_frame:
 		PREP_GPIO_MASK_NAMED(all)
 		GPIO_APPLY_MASK_TO_ADDR()
 		
-		QBNE l_start_bit_loop, r_bit_num, 0
+		QBNE l_start_bit_loop, r_bit_num, #0
 
 
 l_word_loop:
@@ -128,7 +128,7 @@ l_word_loop:
 		PREP_GPIO_MASK_NAMED(odd)
 		GPIO_APPLY_MASK_TO_ADDR()
 		
-		QBNE l_header_bit_loop, r_bit_num, 0
+		QBNE l_header_bit_loop, r_bit_num, #0
 
 
 	// for bit in 24 to 0
@@ -187,7 +187,7 @@ l_word_loop:
 		// Bits sent
 		///////////////////////////////////////////////////////////////////////
 
-		QBNE l_bit_loop, r_bit_num, 0
+		QBNE l_bit_loop, r_bit_num, #0
 	//end l_bit_loop
 
 	// The RGB streams have been clocked out
@@ -206,9 +206,7 @@ l_end_frame:
 	RESET_GPIO_ONES()
 
 	// numleds / 2 bits of 1
-	PREP_GPIO_ADDRS_FOR_SET()
-	PREP_GPIO_MASK_NAMED(even)
-	GPIO_APPLY_MASK_TO_ADDR()
+	
 
 	l_end_bit_loop:
 		DECREMENT r_bit_num
@@ -217,15 +215,19 @@ l_end_frame:
 		PREP_GPIO_ADDRS_FOR_SET()
 		PREP_GPIO_MASK_NAMED(odd)
 		GPIO_APPLY_MASK_TO_ADDR()
+	
+		// raise data
+	        PREP_GPIO_ADDRS_FOR_SET()
+        	PREP_GPIO_MASK_NAMED(even)
+	        GPIO_APPLY_MASK_TO_ADDR()
 		
-		// lower data
+		// Clocks LOW
 		PREP_GPIO_ADDRS_FOR_CLEAR()
 		PREP_GPIO_MASK_NAMED(odd)
 		GPIO_APPLY_MASK_TO_ADDR()
 
-		QBNE l_end_bit_loop, r_bit_num, 0
+		QBNE l_end_bit_loop, r_bit_num, #0
 	
-
 	PREP_GPIO_ADDRS_FOR_CLEAR()
 	PREP_GPIO_MASK_NAMED(all)
 	GPIO_APPLY_MASK_TO_ADDR()
