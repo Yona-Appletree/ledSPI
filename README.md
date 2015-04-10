@@ -42,24 +42,35 @@ Angstrom - RevB
 	cp /boot/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/
 	modprobe uio_pruss
+	vi /boot/uboot/uEnv.txt
 	reboot
+	sudo ./install-service.sh
 
-Debian - RevC
+Debian - RevC (2014-04-23)
 
 	git clone git://github.com/Yona-Appletree/LEDscape
 	cd LEDscape
 	cp /boot/uboot/dtbs/am335x-boneblack.dtb{,.preledscape_bk}
 	cp am335x-boneblack.dtb /boot/uboot/dtbs/
 	modprobe uio_pruss
+	vi /boot/uboot/uEnv.txt 
+	reboot
 
-Disable HDMI (see below)
+Debian - RevC (2015-03-01)
 
+	git clone git://github.com/Yona-Appletree/LEDscape
+	cd LEDscape
+	cp ./boot/dtbs/3.8.13-bone70/am335x-boneblack.dtb{,.preledscape_bk}
+	cp am335x-boneblack.dtb ./boot/dtbs/3.8.13-bone70/
+	modprobe uio_pruss	
+	vi /boot/uEnv.txt
 	reboot
 
 After rebooting you will need to enter the LEDscape folder and compile the LEDscape code.
 
 	cd LEDscape
 	make
+	sudo ./install-service.sh
 	
 Note: Locating the am335x-boneblack.dtb file:
 * Older BBB have the file in /boot;
