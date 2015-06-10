@@ -7,4 +7,4 @@ cd "$DIRNAME"
 # (sleep 30; /usr/bin/sshd -f /etc/ssh/sshd_config) &
 
 modprobe uio_pruss
-./ledspi-server -c 1080
+./ledspi-server -c 1080 -S 10500000

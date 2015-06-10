@@ -456,7 +456,7 @@ void handle_args(int argc, char ** argv) {
 	extern char *optarg;
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlL:r:g:b:0:1:m:M:", long_options, NULL)) != -1)
+	while ((opt = getopt_long(argc, argv, "p:P:c:s:d:D:o:ithlL:r:g:b:0:1:m:M:S:", long_options, NULL)) != -1)
 	{
 		switch (opt)
 		{
@@ -721,6 +721,7 @@ void ensure_server_setup() {
 			g_server_config.spi_dev_path,
 		    g_server_config.spi_speed_hz
 		);
+		printf(" OK at %d hz\n", g_runtime_state.spio_conn->speed_hz);
 		g_runtime_state.leds_per_strip = g_server_config.leds_per_strip;
 	}
 
