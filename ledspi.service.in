@@ -1,0 +1,10 @@
+[Unit]
+Description=LedSPI UDP Receiver
+
+[Service]
+WorkingDirectory=LEDSPI_PATH/
+ExecStart=LEDSPI_PATH/run-ledspi
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

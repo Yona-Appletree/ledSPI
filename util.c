@@ -168,3 +168,40 @@ strlcpy(
 	return (srclen);
 }
 #endif /* !HAVE_STRLCPY */
+
+
+const char* color_channel_order_to_string(color_channel_order_t color_channel_order) {
+	switch (color_channel_order) {
+		case COLOR_ORDER_RGB: return "RGB";
+		case COLOR_ORDER_RBG: return "RBG";
+		case COLOR_ORDER_GRB: return "GRB";
+		case COLOR_ORDER_GBR: return "GBR";
+		case COLOR_ORDER_BGR: return "BGR";
+		case COLOR_ORDER_BRG: return "BRG";
+		default: return  "<invalid color_channel_order>";
+	}
+}
+
+color_channel_order_t color_channel_order_from_string(const char* str) {
+	if (strcasecmp(str, "RGB") == 0) {
+		return COLOR_ORDER_RGB;
+	}
+	else if (strcasecmp(str, "RBG") == 0) {
+		return COLOR_ORDER_RBG;
+	}
+	else if (strcasecmp(str, "GRB") == 0) {
+		return COLOR_ORDER_GRB;
+	}
+	else if (strcasecmp(str, "GBR") == 0) {
+		return COLOR_ORDER_GBR;
+	}
+	else if (strcasecmp(str, "BGR") == 0) {
+		return COLOR_ORDER_BGR;
+	}
+	else if (strcasecmp(str, "BRG") == 0) {
+		return COLOR_ORDER_BRG;
+	}
+	else {
+		return COLOR_ORDER_RGB;
+	}
+}

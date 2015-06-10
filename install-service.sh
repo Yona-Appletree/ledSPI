@@ -2,14 +2,14 @@
 
 cd $(dirname $0)
 
-if [[ -f ledscape.service ]]; then
+if [[ -f ledspi.service ]]; then
 	echo "Enabling Service..."
-	systemctl enable $(pwd)/ledscape.service || exit -1
+	systemctl enable $(pwd)/ledspi.service || exit -1
 
 	echo "Starting Service..."
-	systemctl start ledscape.service
-	systemctl status ledscape.service
+	systemctl start ledspi.service
+	systemctl status ledspi.service
 else
-	echo "Could not find ledscape.service. Please run make first"
+	echo "Could not find ledspi.service. Please run make first"
 	exit -1
 fi

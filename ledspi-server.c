@@ -4,15 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <time.h>
 #include <sys/time.h>
 #include <fcntl.h>
-#include <termios.h>
-#include <ctype.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <netinet/in.h>
-#include <inttypes.h>
 #include <errno.h>
 #include <string.h>
 #include <math.h>
@@ -21,22 +16,12 @@
 #include <net/if.h>
 #include <sys/mman.h>
 #include "util.h"
-#include "ledscape.h"
+#include "spio.h"
 
 #include "lib/cesanta/net_skeleton.h"
 #include "lib/cesanta/frozen.h"
 
-#include <pthread.h>
 #include <stdbool.h>
-
-// TODO:
-// Server:
-// 	- ip-stack Agnostic socket stuff
-//  - UDP receiver
-// Config:
-//  - White-balance, curve adjustment
-//  - Respecting interpolation and dithering settings
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DEFINES, CONSTANTS and UTILS
@@ -54,6 +39,7 @@
 #define maxt(t, a, b) ((t) (a) > (t) (b) ? (a) : (b))
 
 static const int MAX_CONFIG_FILE_LENGTH_BYTES = 1024*1024*10;
+static const uint32_t SPISCAPE_MAX_STRIPS = 1;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TYPES
@@ -65,9 +51,10 @@ typedef enum {
 	DEMO_MODE_BLACK = 3
 } demo_mode_t;
 
+
 typedef struct {
-	char output_mode_name[512];
-	char output_mapping_name[512];
+	char spi_dev_path[512];
+	uint32_t spi_speed_hz;
 
 	demo_mode_t demo_mode;
 
@@ -220,19 +207,18 @@ inline int opc_server_set_error(
 // Global Data
 
 server_config_t g_server_config = {
-	.output_mode_name = "ws281x",
-	.output_mapping_name = "original-ledscape",
+	.spi_dev_path = "/dev/spidev0.0",
+	.spi_speed_hz = 8000000,
 
 	.demo_mode = DEMO_MODE_FADE,
 
 	.tcp_port = 7890,
 	.udp_port = 7890,
-
 	.e131_port = 5568,
 
-	.leds_per_strip = 176,
-	.used_strip_count = LEDSCAPE_NUM_STRIPS,
-	.color_channel_order = COLOR_ORDER_BRG,
+	.leds_per_strip = 256,
+	.used_strip_count = 1,
+	.color_channel_order = COLOR_ORDER_BGR,
 
 	.interpolation_enabled = TRUE,
 	.dithering_enabled = TRUE,
@@ -270,6 +256,8 @@ static struct
 
 	pixel_delta_t* frame_dithering_overflow;
 
+	uint8_t* spi_buffer;
+
 	uint8_t has_prev_frame;
 	uint8_t has_current_frame;
 	uint8_t has_next_frame;
@@ -285,10 +273,7 @@ static struct
 
 	struct timeval prev_current_delta_tv;
 
-	ledscape_t * leds;
-
-	char pru0_program_filename[4096];
-	char pru1_program_filename[4096];
+	spio_connection * spio_conn;
 
 	uint32_t red_lookup[257];
 	uint32_t green_lookup[257];
@@ -312,7 +297,7 @@ static struct
 		.tv_sec = 0,
 		.tv_usec = 0
 	},
-	.leds = NULL
+	.spio_conn = NULL
 };
 
 // Global thread handles
@@ -349,7 +334,6 @@ static struct option long_options[] =
 
 		{"count", required_argument, NULL, 'c'},
 		{"strip-count", required_argument, NULL, 's'},
-		{"dimensions", required_argument, NULL, 'd'},
 
 		{"channel-order", required_argument, NULL, 'o'},
 
@@ -367,48 +351,13 @@ static struct option long_options[] =
 		{"green_bal", required_argument, NULL, 'g'},
 		{"blue_bal", required_argument, NULL, 'b'},
 
-		{"pru0_mode", required_argument, NULL, '0'},
-		{"pru1_mode", required_argument, NULL, '1'},
-
-		{"mode", required_argument, NULL, 'm'},
-		{"mapping", required_argument, NULL, 'M'},
+		{"spi-dev", required_argument, NULL, 'd'},
+		{"spi-speed-hz", required_argument, NULL, 'S'},
 
 		{"config", required_argument, NULL, 'C'},
 
 		{NULL, 0, NULL, 0}
 	};
-
-void set_pru_mode_and_mapping_from_legacy_output_mode_name(const char* input) {
-	if (strcasecmp(input, "NOP") == 0) {
-		strcpy(g_server_config.output_mode_name, "nop");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "DMX") == 0) {
-		strcpy(g_server_config.output_mode_name, "dmx");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "WS2801") == 0) {
-		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-	else if (strcasecmp(input, "WS2801_NEWPINS") == 0) {
-		strcpy(g_server_config.output_mode_name, "ws2801");
-		strcpy(g_server_config.output_mapping_name, "rgb-123-v2");
-	}
-	else /*if (strcasecmp(input, "WS281x") == 0)*/ {
-		// The default case is to use ws281x
-		strcpy(g_server_config.output_mode_name, "ws281x");
-		strcpy(g_server_config.output_mapping_name, "original-ledscape");
-	}
-
-	fprintf(stderr,
-		"WARNING: PRU mode set using legacy -0 or -1 flags; please update to use --mode and --mapping.\n"
-			"   '%s' interpreted as mode '%s' and mapping '%s'\n",
-		input,
-		g_server_config.output_mode_name,
-		g_server_config.output_mapping_name
-	);
-}
 
 void print_usage(char ** argv) {
 	printf("Usage: %s ", argv[0]);
@@ -531,17 +480,6 @@ void handle_args(int argc, char ** argv) {
 				g_server_config.used_strip_count = (uint32_t) atoi(optarg);
 			} break;
 
-			case 'd': {
-				int width=0, height=0;
-
-				if (sscanf(optarg,"%dx%d", &width, &height) == 2) {
-					g_server_config.leds_per_strip = (uint32_t) (width * height);
-				} else {
-					printf("Invalid argument for -d; expected NxN; actual: %s", optarg);
-					exit(EXIT_FAILURE);
-				}
-			} break;
-
 			case 'D': {
 				g_server_config.demo_mode = demo_mode_from_string(optarg);
 			} break;
@@ -579,20 +517,12 @@ void handle_args(int argc, char ** argv) {
 				g_server_config.white_point.blue = (float) atof(optarg);
 			} break;
 
-			case '0': {
-				set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
+			case 'd': {
+				strlcpy(g_server_config.spi_dev_path, optarg, sizeof(g_server_config.spi_dev_path));
 			} break;
 
-			case '1': {
-				set_pru_mode_and_mapping_from_legacy_output_mode_name(optarg);
-			} break;
-
-			case 'm': {
-				strlcpy(g_server_config.output_mode_name, optarg, sizeof(g_server_config.output_mode_name));
-			} break;
-
-			case 'M': {
-				strlcpy(g_server_config.output_mapping_name, optarg, sizeof(g_server_config.output_mapping_name));
+			case 'S': {
+				g_server_config.spi_speed_hz = (uint32_t) atoi(optarg);
 			} break;
 
 			case 'C': {
@@ -628,7 +558,8 @@ void handle_args(int argc, char ** argv) {
 							case 'e': printf("The UDP port to listen for e131 data on"); break;
 							case 'c': printf("The number of pixels connected to each output channel"); break;
 							case 's': printf("The number of used output channels (improves performance by not interpolating/dithering unused channels)"); break;
-							case 'd': printf("Alternative to --count; specifies pixel count as a dimension, e.g. 16x16 (256 pixels)"); break;
+							case 'd': printf("The SPI device to connect to"); break;
+							case 'S': printf("The speed of the SPI device, in hertz"); break;
 							case 'D':
 								printf("Configures the idle (demo) mode which activates when no data arrives for more than 5 seconds. Modes:\n");
 						        printf("\t- none   Do nothing; leaving LED colors as they were\n");
@@ -657,7 +588,7 @@ void handle_args(int argc, char ** argv) {
 						        break;
 							case 'M':
 								printf("Sets the pin mapping used:\n");
-						        printf("\toriginal-ledscape: Original LEDscape pinmapping. Used on older RGB-123 capes.\n");
+						        printf("\toriginal-ledspi: Original LedSPI pinmapping. Used on older RGB-123 capes.\n");
 						        printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
 						        break;
 							case 'C':
@@ -716,7 +647,7 @@ int main(int argc, char ** argv)
 
 	fprintf(stderr,
 		"[main] Starting server on ports (tcp=%d, udp=%d) for %d pixels on %d strips\n",
-		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, LEDSCAPE_NUM_STRIPS
+		g_server_config.tcp_port, g_server_config.udp_port, g_server_config.leds_per_strip, SPISCAPE_MAX_STRIPS
 	);
 
 	pthread_create(&g_threads.render_thread, NULL, render_thread, NULL);
@@ -765,72 +696,30 @@ void ensure_server_setup() {
 	pthread_mutex_lock(&g_runtime_state.mutex);
 	pthread_mutex_lock(&g_server_config.mutex);
 
-	// Determine if we need to [re]initialize LEDscape
+	// Determine if we need to [re]initialize LedSPI
 
-	bool ledscape_init_needed = false;
+	bool spi_init_needed = false;
 
-	if (g_runtime_state.leds == NULL) {
-		ledscape_init_needed = true;
+	if (g_runtime_state.spio_conn == NULL) {
+		spi_init_needed = true;
 	}
-	else if (g_runtime_state.leds_per_strip != g_server_config.leds_per_strip) {
-		ledscape_init_needed = true;
-	}
-	else if (g_runtime_state.pru1_program_filename == NULL || g_runtime_state.pru0_program_filename == NULL) {
-		ledscape_init_needed = true;
-	}
-	else {
-		char pru0_filename_temp[4096],
-			pru1_filename_temp[4096];
-
-		build_pruN_program_name(
-			g_server_config.output_mode_name,
-			g_server_config.output_mapping_name,
-			0,
-			pru0_filename_temp,
-			sizeof(pru0_filename_temp)
-		);
-
-		build_pruN_program_name(
-			g_server_config.output_mode_name,
-			g_server_config.output_mapping_name,
-			1,
-			pru1_filename_temp,
-			sizeof(pru1_filename_temp)
-		);
-
-		if (strcasecmp(pru0_filename_temp, g_runtime_state.pru0_program_filename) != 0 ||
-			strcasecmp(pru1_filename_temp, g_runtime_state.pru1_program_filename) != 0) {
-			ledscape_init_needed = true;
-		}
+	else if (strcasecmp(g_server_config.spi_dev_path, g_runtime_state.spio_conn->device_path) != 0) {
+		spi_init_needed = true;
 	}
 
-	if (ledscape_init_needed) {
-		if (g_runtime_state.leds != NULL) {
-			printf("[main] Closing LEDscape...");
+	if (spi_init_needed) {
+		if (g_runtime_state.spio_conn != NULL) {
+			printf("[main] Closing SPI...");
 
-			ledscape_close(g_runtime_state.leds);
-			g_runtime_state.leds = NULL;
+			spio_close(g_runtime_state.spio_conn);
+			g_runtime_state.spio_conn = NULL;
 		}
 
-		// Init LEDscape
-		printf("[main] Starting LEDscape...");
-		g_runtime_state.leds = ledscape_init_with_programs(
-			g_server_config.leds_per_strip,
-			build_pruN_program_name(
-				g_server_config.output_mode_name,
-				g_server_config.output_mapping_name,
-				0,
-				g_runtime_state.pru0_program_filename,
-				sizeof(g_runtime_state.pru0_program_filename)
-			),
-
-			build_pruN_program_name(
-				g_server_config.output_mode_name,
-				g_server_config.output_mapping_name,
-				1,
-				g_runtime_state.pru1_program_filename,
-				sizeof(g_runtime_state.pru1_program_filename)
-			)
+		// Init SPI
+		printf("[main] Connecting SPI...");
+		g_runtime_state.spio_conn = spio_open(
+			g_server_config.spi_dev_path,
+		    g_server_config.spi_speed_hz
 		);
 		g_runtime_state.leds_per_strip = g_server_config.leds_per_strip;
 	}
@@ -908,34 +797,16 @@ int validate_server_config(
 		}
 	}
 
-	{ // outputMode and outputMapping
-		for (int pruNum=0; pruNum < 2; pruNum++) {
-			build_pruN_program_name(
-				input_config->output_mode_name,
-				input_config->output_mapping_name,
-				pruNum,
-				path_temp,
-				sizeof(path_temp)
-			);
-
-			if( access( path_temp, R_OK ) == -1 ) {
-				add_error(
-					"\n\t\t\"" "Invalid mapping and/or mode name; cannot access PRU %d program '%s'" "\",",
-					pruNum,
-					path_temp
-				);
-			}
-		}
-	}
+	// TODO: Assert SPI dev and speed
 
 	// demoMode
 	assert_enum_valid("Demo Mode", input_config->demo_mode);
 
 	// ledsPerStrip
-	assert_int_range_inclusive("LED Count", 1, 1024, input_config->leds_per_strip);
+	assert_int_range_inclusive("LED Count", 1, 8096, input_config->leds_per_strip);
 
 	// usedStripCount
-	assert_int_range_inclusive("Strip/Channel Count", 1, 48, input_config->used_strip_count);
+	assert_int_range_inclusive("Strip/Channel Count", 1, 1, input_config->used_strip_count);
 
 	// colorChannelOrder
 	assert_enum_valid("Color Channel Order", input_config->color_channel_order);
@@ -1012,12 +883,13 @@ int server_config_from_json(
 	}
 
 	// Search for parameter "bar" and print it's value
-	if ((token = find_json_token(json_tokens, "outputMode"))) {
-		strlcpy(output_config->output_mode_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
+	if ((token = find_json_token(json_tokens, "spiDevPath"))) {
+		strlcpy(output_config->spi_dev_path, token->ptr, mint(int32_t, sizeof(g_server_config.spi_dev_path), token->len + 1));
 	}
 
-	if ((token = find_json_token(json_tokens, "outputMapping"))) {
-		strlcpy(output_config->output_mapping_name, token->ptr, mint(int32_t, sizeof(g_server_config.output_mode_name), token->len + 1));
+	if ((token = find_json_token(json_tokens, "spiSpeedHz"))) {
+		strlcpy(token_value, token->ptr, mint(int32_t, sizeof(token_value), token->len + 1));
+		output_config->spi_speed_hz = (uint32_t) atoi(token_value);
 	}
 
 	if ((token = find_json_token(json_tokens, "demoMode"))) {
@@ -1098,8 +970,8 @@ void server_config_to_json(char* dest_string, size_t dest_string_size, server_co
 		dest_string_size,
 
 		"{\n"
-			"\t" "\"outputMode\": \"%s\"," "\n"
-			"\t" "\"outputMapping\": \"%s\"," "\n"
+			"\t" "\"spiDevPath\": \"%s\"," "\n"
+			"\t" "\"spiSpeedHz\": \"%d\"," "\n"
 			"\t" "\"demoMode\": \"%s\"," "\n"
 
 			"\t" "\"ledsPerStrip\": %d," "\n"
@@ -1121,8 +993,8 @@ void server_config_to_json(char* dest_string, size_t dest_string_size, server_co
 			"\t" "}" "\n"
 			"}\n",
 
-		input_config->output_mode_name,
-		input_config->output_mapping_name,
+		input_config->spi_dev_path,
+		input_config->spi_speed_hz,
 
 		demo_mode_to_string(input_config->demo_mode),
 
@@ -1183,7 +1055,7 @@ void build_lookup_tables() {
 */
 void ensure_frame_data() {
 	pthread_mutex_lock(&g_server_config.mutex);
-	uint32_t led_count = (uint32_t)(g_server_config.leds_per_strip) * LEDSCAPE_NUM_STRIPS;
+	uint32_t led_count = (uint32_t)(g_server_config.leds_per_strip) * SPISCAPE_MAX_STRIPS;
 	pthread_mutex_unlock(&g_server_config.mutex);
 
 	pthread_mutex_lock(&g_runtime_state.mutex);
@@ -1195,12 +1067,14 @@ void ensure_frame_data() {
 			free(g_runtime_state.current_frame_data);
 			free(g_runtime_state.next_frame_data);
 			free(g_runtime_state.frame_dithering_overflow);
+			free(g_runtime_state.spi_buffer);
 		}
 
 		g_runtime_state.frame_size = led_count;
 		g_runtime_state.previous_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
 		g_runtime_state.current_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
 		g_runtime_state.next_frame_data = malloc(led_count * sizeof(buffer_pixel_t));
+		g_runtime_state.spi_buffer = malloc(4 + led_count*4 + led_count / 16 + 1);
 		g_runtime_state.frame_dithering_overflow = malloc(led_count * sizeof(pixel_delta_t));
 		g_runtime_state.has_next_frame = FALSE;
 		printf("frame_size1=%u\n", g_runtime_state.frame_size);
@@ -1305,7 +1179,9 @@ inline uint32_t lutInterpolate(uint32_t value, uint32_t* lut) {
 void* render_thread(void* unused_data)
 {
 	unused_data=unused_data; // Suppress Warnings
-	fprintf(stderr, "[render] Starting render thread for %u total pixels\n", g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS);
+	fprintf(stderr, "[render] Starting render thread for %u total pixels\n", g_server_config.leds_per_strip *
+	                                                                         SPISCAPE_MAX_STRIPS
+	);
 
 	// Timing Variables
 	struct timeval frame_progress_tv, now_tv;
@@ -1325,8 +1201,8 @@ void* render_thread(void* unused_data)
 		// Increment the frame counter
 		g_runtime_state.frame_counter++;
 
-		// Wait until LEDscape is initialized
-		if (g_runtime_state.leds == NULL) {
+		// Wait until LedSPI is initialized
+		if (g_runtime_state.spio_conn == NULL) {
 			printf("[render] Awaiting server initialization...\n");
 			pthread_mutex_unlock(&g_runtime_state.mutex);
 			usleep(1e6 /* 1s */);
@@ -1384,14 +1260,12 @@ void* render_thread(void* unused_data)
 		// 	frame_progress16
 		// );
 
-		// Setup LEDscape for this frame
+		// Setup LedSPI for this frame
 		buffer_index = (buffer_index+1)%2;
-
-		ledscape_frame_t * const frame = ledscape_frame(g_runtime_state.leds, buffer_index);
 
 		// Build the render frame
 		uint32_t led_count = g_runtime_state.frame_size;
-		uint32_t leds_per_strip = led_count / LEDSCAPE_NUM_STRIPS;
+		uint32_t leds_per_strip = led_count / SPISCAPE_MAX_STRIPS;
 		uint32_t data_index = 0;
 
 		// Update the dithering frame counter
@@ -1407,7 +1281,7 @@ void* render_thread(void* unused_data)
 		pthread_mutex_lock(&g_server_config.mutex);
 
 		// Use the strip count from configs. This can save time that would be used dithering
-		used_strip_count = min(g_server_config.used_strip_count, LEDSCAPE_NUM_STRIPS);
+		used_strip_count = min(g_server_config.used_strip_count, SPISCAPE_MAX_STRIPS);
 
 		// Only enable dithering if we're better than 100fps
 		bool dithering_enabled = (frame_duration_avg_usec < 10000) && g_server_config.dithering_enabled;
@@ -1418,6 +1292,12 @@ void* render_thread(void* unused_data)
 
 		pthread_mutex_unlock(&g_server_config.mutex);
 
+		// Initialize SPI buffer with start frame (four 0s) and clock padding (pixels/2 or more bits)
+		uint8_t* spi_buffer = g_runtime_state.spi_buffer;
+		spi_buffer[0] = spi_buffer[1] = spi_buffer[2] = spi_buffer[3] = 0;
+		for (int i=0; i<leds_per_strip/16+1; i++)
+			spi_buffer[4 + leds_per_strip*4 + i] = 255;
+
 		// Only allow dithering to take effect if it blinks faster than 60fps
 		uint32_t maxDitherFrames = 16667 / frame_duration_avg_usec;
 
@@ -1426,8 +1306,6 @@ void* render_thread(void* unused_data)
 				buffer_pixel_t* pixel_in_prev = &g_runtime_state.previous_frame_data[data_index];
 				buffer_pixel_t* pixel_in_current = &g_runtime_state.current_frame_data[data_index];
 				pixel_delta_t* pixel_in_overflow = &g_runtime_state.frame_dithering_overflow[data_index];
-
-				ledscape_pixel_t* const pixel_out = & frame[led_index].strip[strip_index];
 
 				int32_t interpolatedR;
 				int32_t interpolatedG;
@@ -1484,13 +1362,13 @@ void* render_thread(void* unused_data)
 				uint8_t g = (uint8_t) min((ditheredG+0x80) >> 8, 255);
 				uint8_t b = (uint8_t) min((ditheredB+0x80) >> 8, 255);
 
-				ledscape_pixel_set_color(
-					pixel_out,
-					color_channel_order,
-					r,
-					g,
-					b
-				);
+
+				// TODO: Supprt color ordering properly
+				uint8_t* pixel_out = &spi_buffer[4 + led_index*4];
+				pixel_out[0] = 255;
+				pixel_out[1] = b;
+				pixel_out[2] = g;
+				pixel_out[3] = r;
 
 //				if (led_index == 0 && strip_index == 3) {
 //					printf("channel %d: %03d %03d %03d\n", strip_index, r, g, b);
@@ -1514,10 +1392,13 @@ void* render_thread(void* unused_data)
 		}
 
 		// Render the frame
-		ledscape_wait(g_runtime_state.leds);
-		ledscape_draw(g_runtime_state.leds, buffer_index);
+		spio_write(g_runtime_state.spio_conn, spi_buffer, 4 + leds_per_strip*4 + leds_per_strip/16 + 1);
 
 		pthread_mutex_unlock(&g_runtime_state.mutex);
+
+		// Give other threads time... this was found through expirmenting on an Raspberry Pi B+, where the animation
+		// was quite choppy without it. Not totally sure of the reason.
+		usleep(10);
 
 		// Output Timing Info
 		gettimeofday(&stop_tv, NULL);
@@ -1536,12 +1417,13 @@ void* render_thread(void* unused_data)
 				frames_since_last_fps_report
 			);
 
+
 			frames_since_last_fps_report = 0;
 			frame_duration_sum_usec = 0;
 		}
 	}
 
-	ledscape_close(g_runtime_state.leds);
+	spio_close(g_runtime_state.spio_conn);
 	pthread_exit(NULL);
 }
 
@@ -1561,13 +1443,13 @@ typedef enum
 	OPC_SYSID_FADECANDY = 1,
 
 	// Pending approval from the OPC folks
-		OPC_SYSID_LEDSCAPE = 2
+		OPC_SYSID_LEDSPI = 2
 } opc_system_id_t;
 
 typedef enum
 {
-	OPC_LEDSCAPE_CMD_GET_CONFIG = 1
-} opc_ledscape_cmd_id_t;
+	OPC_LEDSPI_CMD_GET_CONFIG = 1
+} opc_ledspi_cmd_id_t;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Demo Data Thread
@@ -1652,7 +1534,7 @@ void* demo_thread(void* unused_data)
 
 		pthread_mutex_lock(&g_server_config.mutex);
 		uint32_t leds_per_strip = g_server_config.leds_per_strip;
-		uint32_t channel_count = g_server_config.leds_per_strip*3*LEDSCAPE_NUM_STRIPS;
+		uint32_t channel_count = g_server_config.leds_per_strip*3* SPISCAPE_MAX_STRIPS;
 		demo_mode_t demo_mode = g_server_config.demo_mode;
 		pthread_mutex_unlock(&g_server_config.mutex);
 
@@ -1678,7 +1560,7 @@ void* demo_thread(void* unused_data)
 				memset(buffer, 0, buffer_size);
 			}
 
-			for (uint32_t strip = 0, data_index = 0 ; strip < LEDSCAPE_NUM_STRIPS ; strip++)
+			for (uint32_t strip = 0, data_index = 0 ; strip < SPISCAPE_MAX_STRIPS; strip++)
 			{
 				for (uint16_t p = 0 ; p < leds_per_strip; p++, data_index+=3)
 				{
@@ -1840,7 +1722,7 @@ void* e131_server_thread(void* unused_data)
 		// Ensure the buffer
 		pthread_mutex_lock(&g_server_config.mutex);
 		uint32_t leds_per_strip = g_server_config.leds_per_strip;
-		uint32_t led_count = g_server_config.leds_per_strip * LEDSCAPE_NUM_STRIPS;
+		uint32_t led_count = g_server_config.leds_per_strip * SPISCAPE_MAX_STRIPS;
 		pthread_mutex_unlock(&g_server_config.mutex);
 
 		if (dmx_buffer == NULL || dmx_buffer_size != led_count) {
@@ -1860,17 +1742,17 @@ void* e131_server_thread(void* unused_data)
 				uint16_t dmx_universe_num = ((uint16_t)packet_buffer[113] << 8) | packet_buffer[114];
 
 				if (dmx_universe_num >= 1 && dmx_universe_num <= 48) {
-					uint16_t ledscape_channel_num = dmx_universe_num - 1;
+					uint16_t ledspi_channel_num = dmx_universe_num - 1;
 					// Data OK
 //					set_next_frame_single_channel_data(
-//						ledscape_channel_num,
+//						ledspi_channel_num,
 //						packet_buffer + 126,
 //						received_packet_size - 126,
 //						TRUE
 //					);
 
 					memcpy(
-						dmx_buffer + ledscape_channel_num * leds_per_strip * sizeof(buffer_pixel_t),
+						dmx_buffer + ledspi_channel_num * leds_per_strip * sizeof(buffer_pixel_t),
 						packet_buffer + 126,
 						min(received_packet_size - 126, led_count * sizeof(buffer_pixel_t))
 					);
@@ -1902,7 +1784,7 @@ void* e131_server_thread(void* unused_data)
 			frame_counter_at_last_update = g_runtime_state.frame_counter;
 		}
 
-		if (packets_since_update >= LEDSCAPE_NUM_STRIPS) {
+		if (packets_since_update >= SPISCAPE_MAX_STRIPS) {
 			// Force an update here
 			while (g_runtime_state.frame_counter == frame_counter_at_last_update)
 				usleep(1e3 /* 1ms */);
@@ -1977,13 +1859,13 @@ void* udp_server_thread(void* unused_data)
 					// System specific commands
 					const uint16_t system_id = opc_cmd_payload[0] << 8 | opc_cmd_payload[1];
 
-					if (system_id == OPC_SYSID_LEDSCAPE) {
-						const opc_ledscape_cmd_id_t ledscape_cmd_id = opc_cmd_payload[2];
+					if (system_id == OPC_SYSID_LEDSPI) {
+						const opc_ledspi_cmd_id_t ledspi_cmd_id = opc_cmd_payload[2];
 
-						if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+						if (ledspi_cmd_id == OPC_LEDSPI_CMD_GET_CONFIG) {
 							warn("[udp] WARN: Config request request received but not supported on UDP.\n");
 						} else {
-							warn("[udp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+							warn("[udp] WARN: Received command for unsupported LedSPI Command: %d\n", (int)ledspi_cmd_id);
 						}
 					} else {
 						warn("[udp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);
@@ -2018,14 +1900,14 @@ static void event_handler(struct ns_connection *conn, enum ns_event ev, void *ev
 						// System specific commands
 						const uint16_t system_id = opc_cmd_payload[0] << 8 | opc_cmd_payload[1];
 
-						if (system_id == OPC_SYSID_LEDSCAPE) {
-							const opc_ledscape_cmd_id_t ledscape_cmd_id = opc_cmd_payload[2];
+						if (system_id == OPC_SYSID_LEDSPI) {
+							const opc_ledspi_cmd_id_t ledspi_cmd_id = opc_cmd_payload[2];
 
-							if (ledscape_cmd_id == OPC_LEDSCAPE_CMD_GET_CONFIG) {
+							if (ledspi_cmd_id == OPC_LEDSPI_CMD_GET_CONFIG) {
 								warn("[tcp] Responding to config request\n");
 								ns_send(conn, g_server_config.json, strlen(g_server_config.json)+1);
 							} else {
-								warn("[tcp] WARN: Received command for unsupported LEDscape Command: %d\n", (int)ledscape_cmd_id);
+								warn("[tcp] WARN: Received command for unsupported LedSPI Command: %d\n", (int)ledspi_cmd_id);
 							}
 						} else {
 							warn("[tcp] WARN: Received command for unsupported system-id: %d\n", (int)system_id);

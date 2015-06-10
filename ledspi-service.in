@@ -1,24 +1,24 @@
 ### BEGIN INIT INFO
-# Provides: ledscape-server
+# Provides: spileds-server
 # Required-Start: $local_fs $remote_fs
 # Required-Stop:
 # X-Start-Before:
 # Default-Start: 2 3 4 5
 # Default-Stop: 0 1 6
-# Short-Description: Starts the LEDscape server
+# Short-Description: Starts the SPIleds server
 ### END INIT INFO
  
-LEDSCAPE=/root/LEDscape/run-ledscape
-LEDSCAPE_ARGS=""
-PIDFILE=/var/run/ledscape-server.pid
+SPILEDS=LEDSPI_PATH/run-ledspi
+SPILEDS_ARGS=""
+PIDFILE=/var/run/spileds-server.pid
 case "$1" in
   start)
-    echo -n "Starting LEDScape Server: ledscape-server"
-    start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile --background --exec $LEDSCAPE -- $LEDSCAPE_ARGS
+    echo -n "Starting SPIleds Server: spileds-server"
+    start-stop-daemon --start --quiet --pidfile $PIDFILE --make-pidfile --background --exec $SPILEDS -- $SPILEDS_ARGS
     echo "."
     ;;
   stop)
-    echo -n "Stopping LEDScape Server: ledscape-server"
+    echo -n "Stopping SPIleds Server: spileds-server"
     start-stop-daemon --stop --quiet --pidfile $PIDFILE
     echo "."
     ;;

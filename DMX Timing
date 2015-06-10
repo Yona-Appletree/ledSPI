@@ -1,6 +1,0 @@
-  Simplified DMX timing based on specs and logic analysis of DMX data. Times are in microseconds.
-  
-                        ||------------- BYTE ------------||
-  PREAMBLE  | ZEROFRAME  | ZERO | BIT0 | .... | BIT7 |    |
-_________‾‾‾‾________‾‾‾‾‾_______=====================‾‾‾‾‾
-    92    12    36     8    4      4      4      4      8  

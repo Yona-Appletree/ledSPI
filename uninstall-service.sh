@@ -2,13 +2,13 @@
 
 cd $(dirname $0)
 
-if [[ -f ledscape.service ]]; then
+if [[ -f ledspi.service ]]; then
 	echo "Stopping Service..."
-	systemctl stop ledscape.service
+	systemctl stop ledspi.service
 
 	echo "Disabling Service..."
-	systemctl disable $(pwd)/ledscape.service || exit -1
+	systemctl disable $(pwd)/ledspi.service || exit -1
 else
-	echo "Could not find ledscape.service. Please run make first"
+	echo "Could not find ledspi.service. Please run make first"
 	exit -1
 fi
