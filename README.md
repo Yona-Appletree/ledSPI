@@ -1,7 +1,9 @@
 Overview
 ========
-ledSPI is a simple opc-compatible server for driving APA102 leds from spidev-enabled linux machines. It is derived from
-LEDscape and contains the same interpolation and dithering support, which itself was inspired by Fadecandy. 
+ledSPI is a simple opc-compatible server for driving APA102 leds from spidev-enabled linux machines. 
+It is derived from LEDscape and contains the same interpolation and dithering support, which itself was inspired by Fadecandy.
+
+It was created specifically to drive APA102 LEDs from a RaspberryPi from data over the OPC protocol. It supports TCP and UDP OPC data, as well as expiermental support for e131 for DMX compatibility.
 
 
 Building
