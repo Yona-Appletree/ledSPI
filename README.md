@@ -20,3 +20,8 @@ Configuration / Startup
 
 Systemd (`ledspi-service`) and sysv (`ledspi.service`) startup scripts are included. They each run the run-ledspi script in the project directory, which
 can be modified for custom options.
+
+SPI Speed
+=========================
+
+APA102s work well up to about 11mhz, but some kernal drivers only allow setting the SPI speed in powers of two, with a gap between 8 and 16mhz. More information about this on the Raspberry Pi can be found here: https://www.raspberrypi.org/forums/viewtopic.php?f=44&t=43442
