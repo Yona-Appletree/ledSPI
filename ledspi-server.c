@@ -486,7 +486,8 @@ void handle_args(int argc, char ** argv) {
 
 
 			case 'o': {
-				g_server_config.color_channel_order = color_channel_order_from_string(optarg);
+				printf("WARN: Color order setting is not implemented yet.\n");
+				//g_server_config.color_channel_order = color_channel_order_from_string(optarg);
 			} break;
 
 			case 'i': {
@@ -558,7 +559,7 @@ void handle_args(int argc, char ** argv) {
 							case 'e': printf("The UDP port to listen for e131 data on"); break;
 							case 'c': printf("The number of pixels connected to each output channel"); break;
 							case 's': printf("The number of used output channels (improves performance by not interpolating/dithering unused channels)"); break;
-							case 'd': printf("The SPI device to connect to"); break;
+							case 'd': printf("The path to the SPI device to connect to"); break;
 							case 'S': printf("The speed of the SPI device, in hertz"); break;
 							case 'D':
 								printf("Configures the idle (demo) mode which activates when no data arrives for more than 5 seconds. Modes:\n");
@@ -567,30 +568,15 @@ void handle_args(int argc, char ** argv) {
 						        printf("\t- fade   Display a rainbow fade across all LEDs\n");
 						        printf("\t- id     Send the channel index as all three color values or 0xAA (0b10101010) if channel and pixel index are equal");
 						        break;
-							case 'o':
-								printf("Specifies the color channel output order (RGB, RBG, GRB, GBR, BGR or BRG); default is BRG.");
-						        break;
+//							case 'o':
+//								printf("Specifies the color channel output order (RGB, RBG, GRB, GBR, BGR or BRG); default is BRG.");
+//						        break;
 							case 'i': printf("Disables interpolation between frames (choppier output but improves performance)"); break;
 							case 't': printf("Disables dithering (choppier output but improves performance)"); break;
 							case 'l': printf("Disables luminance correction (lower color values appear brighter than they should)"); break;
 							case 'L': printf("Sets the exponent of the luminance power function to the given floating point value (default 2)"); break;
 							case 'r': printf("Sets the red balance to the given floating point number (0-1, default .9)"); break;
 							case 'g': printf("Sets the red balance to the given floating point number (0-1, default 1)"); break;
-							case 'b': printf("Sets the red balance to the given floating point number (0-1, default 1)"); break;
-							case '0': printf("[deprecated] Sets the PRU0 program. Use --mode and --mapping instead."); break;
-							case '1': printf("[deprecated] Sets the PRU1 program. Use --mode and --mapping instead."); break;
-							case 'm':
-								printf("Sets the output mode:\n");
-						        printf("\t- nop      Disable output; can be useful for debugging\n");
-						        printf("\t- ws281x   WS2811/WS2812 output format\n");
-						        printf("\t- ws2801   WS2801-compatible 8-bit SPI output. Supports 24 channels of output with pins in a DATA/CLOCK configuration.\n");
-						        printf("\t- dmx      DMX compatible output (does not support RDM)\n");
-						        break;
-							case 'M':
-								printf("Sets the pin mapping used:\n");
-						        printf("\toriginal-ledspi: Original LedSPI pinmapping. Used on older RGB-123 capes.\n");
-						        printf("\trgb-123-v2: RGB-123 mapping for new capes\n");
-						        break;
 							case 'C':
 								printf("Specifies a configuration file to use and creates it if it does not already exist.\n");
 						        printf("\tIf used with other options, options are parsed in order. Options before --config are overwritten\n");
