@@ -14,6 +14,8 @@ To build, simply check out the project to a spidev-enabled machine, and run `mak
 ledSPI Server
 =========================
 
+*IMPORTANT:* You must have IPv6 enabled. If you get an error like `Address family not supported by protocol`, load the ipv6 module: `sudo modprobe ipv6`
+
 ledSPI can be run using `./ledspi-server`, and can also be enabled using the ledspi-service.sh and ledspi.service files
 for sysV and systemd, respectively. For options about the configuration, use `./ledspi-server -h`.
 
