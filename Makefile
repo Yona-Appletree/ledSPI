@@ -20,8 +20,6 @@ CFLAGS += \
 	-I. \
 	-O2 \
 	-lm \
-	-mtune=cortex-a8 \
-	-march=armv7-a \
 	-Wunused-parameter \
 	-DNS_ENABLE_IPV6 \
 	-Wunknown-pragmas \
